@@ -1,7 +1,32 @@
-build
-mx.scratch
-!.settings
+# Build artifacts
+build/
+*.o
+*.a
+*.elf
+*.bin
+*.hex
 
 # IDE files
 .idea/
 .vscode/
+.cproject
+.project
+.settings/
+.launches/
+*.sublime-workspace
+*.sublime-project
+
+# STM32CubeMX
+mx.scratch
+*.bak
+*.old
+
+# OS-specific
+.DS_Store
+Thumbs.db
+.directory
+
+# Temporary/personal files
+*.log
+*.swp
+CMakeUserPresets.json
