@@ -1,3 +1,7 @@
 build
 mx.scratch
 !.settings
+
+# IDE files
+.idea/
+.vscode/
