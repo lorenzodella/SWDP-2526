@@ -28,6 +28,7 @@
 /* USER CODE BEGIN Includes */
 #include "stm32u5xx_hal.h"
 #include "stm32u5xx_hal_gpio.h"
+#include "stm32u5xx_hal_uart.h"
 #include "string.h"
 #include "stdio.h"
 #include "../../USB_Device/App/usb_device.h"
@@ -755,7 +756,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : PPG_INT_Pin */
   GPIO_InitStruct.Pin = PPG_INT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(PPG_INT_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : MCU_I_O_2_Pin MCU_I_O_1_Pin */
@@ -857,9 +858,9 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
 		switch(current_state) {
 			case STATE_IDLE:
 				// If the device is idle, start data acquisition.
+        erase_memory();
         if (PPG_StartAcquisition() == 1) {
           // HAL_GPIO_WritePin(GPIOB, PPG_INT_Pin, GPIO_PIN_SET);
-          erase_memory();
           current_state = STATE_ACQUISITION;
           // HAL_TIM_Base_Start_IT(&htim2); // Start the timer for periodic data reading
           // LED_On(LED_GREEN); // Provide visual feedback for starting acquisition
@@ -888,26 +889,28 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 {
   if(GPIO_Pin == USER_BUTTON_Pin)
   {
-
+    return;
   }
 
   // PPG interrupt is active-low: handle FIFO read when asserted
   if (GPIO_Pin == PPG_INT_Pin)
   {
     uint32_t samples[32];
+    LED_Toggle(LED_RED);
     uint16_t n = PPG_HandleInterrupt(samples, 32);
     // samples[0..n-1] now contain reconstructed 18-bit values
     // Minimal handling: store first sample timestamped, or extend here to queue/process
     // if (n > 0) {
         // Optional: toggle a debug pin or set a flag for main loop processing
-        LED_Toggle(LED_RED);  // Visual feedback
+          // Visual feedback
     // }
     // Send samples to UART for debugging
-    // for (uint16_t i = 0; i < n; i++) {
-    //   char msg[32];
-    //   snprintf(msg, sizeof(msg), "PPG Sample: %lu\r\n", samples[i]);
-    //   HAL_UART_Transmit(&huart3, (uint8_t*)msg, strlen(msg), 10);
-    // }
+    HAL_UART_Transmit(&huart3, (uint8_t*)"INTERRUPT\r\n", strlen("INTERRUPT\r\n"), 10);
+    for (uint16_t i = 0; i < n; i++) {
+      char msg[32];
+      snprintf(msg, sizeof(msg), "PPG Sample: %lu\r\n", samples[i]);
+      HAL_UART_Transmit(&huart3, (uint8_t*)msg, strlen(msg), 10);
+    }
 
     (void)n; // keep compiler happy if unused
   }
