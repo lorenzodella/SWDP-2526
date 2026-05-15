@@ -87,6 +87,20 @@ uint8_t PPG_StartAcquisition(void)
     return 1;
 }
 
+uint8_t PPG_StopAcquisition(void)
+{
+    // Put the sensor in shutdown mode (SHDN bit = 1); stops sampling and INT generation
+    if (!ppg_write_register(MAX30101_MODE_CONFIG_REG, 0x80)) {
+        return 0;
+    }
+
+    // Clear any pending interrupt by reading the status register
+    uint8_t dummy;
+    ppg_read_register(0x00, &dummy, 1);
+
+    return 1;
+}
+
 uint16_t PPG_HandleInterrupt(uint32_t *out_buf, uint16_t max_samples)
 {
     uint8_t status = 0;

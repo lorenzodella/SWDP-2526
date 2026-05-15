@@ -35,6 +35,7 @@
 
 uint8_t PPG_Initialize(void);
 uint8_t PPG_StartAcquisition(void);
+uint8_t PPG_StopAcquisition(void);
 // Read and parse FIFO samples. out_buf must have space for at least max_samples entries.
 // Returns the number of samples written into out_buf.
 uint16_t PPG_HandleInterrupt(uint32_t *out_buf, uint16_t max_samples);

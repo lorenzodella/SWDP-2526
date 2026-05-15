@@ -890,7 +890,10 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
         }
 			break;
 			case STATE_ACQUISITION:
-				// If data acquisition is active, stop it.
+				// Stop the PPG sensor before changing state so the INT line goes quiet
+				PPG_StopAcquisition();
+        LED_Off(LED_RED);
+				ppg_data_ready = 0;
 				current_state = STATE_IDLE;
 				// HAL_TIM_Base_Stop_IT(&htim2); // Stop the timer
 				// LED_Off(LED_GREEN); // Turn off the LED
@@ -918,7 +921,7 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
   }
 
   // PPG interrupt is active-low: handle FIFO read when asserted
-  if (GPIO_Pin == PPG_INT_Pin)
+  if (GPIO_Pin == PPG_INT_Pin && current_state == STATE_ACQUISITION)
   {
     LED_Toggle(LED_RED);
     // Read samples into the shared buffer; main loop will transmit via USB
