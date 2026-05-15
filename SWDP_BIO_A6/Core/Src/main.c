@@ -114,6 +114,9 @@ int exit_flag = 0;
 Time_Struct timestamp;
 uint16_t tim = 0;
 
+// Buffer to print to serial monitor
+char text_buffer[64];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -873,9 +876,13 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
 				// LED_Off(LED_GREEN); // Turn off the LED
 				break;
 			case STATE_USB_CONNECTED:
-				// If USB is connected, start the download process.
-				exit_flag = 0;
-				current_state = STATE_DOWNLOAD;
+        // ---> STAMPA DI TEST AGGIUNTA QUI <---
+        snprintf(text_buffer, sizeof(text_buffer), "[TEST] Pulsante premuto! USB Attiva!\r\n");
+        CDC_Transmit_FS((uint8_t*)text_buffer, strlen(text_buffer));
+
+				// // If USB is connected, start the download process.
+				// exit_flag = 0;
+				// current_state = STATE_DOWNLOAD;
 				break;
 			default:
 				// Do nothing for other states (e.g., if button is pressed during DOWNLOAD).
@@ -905,11 +912,11 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
           // Visual feedback
     // }
     // Send samples to UART for debugging
-    HAL_UART_Transmit(&huart3, (uint8_t*)"INTERRUPT\r\n", strlen("INTERRUPT\r\n"), 10);
+    snprintf(text_buffer, sizeof(text_buffer), "INTERRUPT\r\n");
+    CDC_Transmit_FS((uint8_t*)text_buffer, strlen(text_buffer));
     for (uint16_t i = 0; i < n; i++) {
-      char msg[32];
-      snprintf(msg, sizeof(msg), "PPG Sample: %lu\r\n", samples[i]);
-      HAL_UART_Transmit(&huart3, (uint8_t*)msg, strlen(msg), 10);
+      snprintf(text_buffer, sizeof(text_buffer), "PPG Sample: %lu\r\n", samples[i]);
+      CDC_Transmit_FS((uint8_t*)text_buffer, strlen(text_buffer));
     }
 
     (void)n; // keep compiler happy if unused
