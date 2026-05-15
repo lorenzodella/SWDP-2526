@@ -117,6 +117,11 @@ uint16_t tim = 0;
 // Buffer to print to serial monitor
 char text_buffer[64];
 
+// PPG data buffer for deferred USB transmission (populated in ISR, consumed in main loop)
+static volatile uint8_t ppg_data_ready = 0;
+static volatile uint16_t ppg_samples_count = 0;
+static uint32_t ppg_samples_buffer[32];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -239,9 +244,24 @@ int main(void)
 	  		break;
 
 	  	  case STATE_ACQUISITION:
-	  		   // All data acquisition is handled by the timer interrupt
-
-			break;
+	  		   // All data acquisition is handled by the timer interrupt (PPG) and periodic timer (IMU).
+	  		   // USB transmission is handled here to avoid calling CDC_Transmit_FS from ISR context.
+	  		   if (usb_flag)
+	  		   {
+	  			   LED_On(LED_GREEN);
+	  			   if (ppg_data_ready)
+	  			   {
+	  				   ppg_data_ready = 0;
+	  				   uint16_t n = ppg_samples_count;
+	  				   snprintf(text_buffer, sizeof(text_buffer), "INTERRUPT\r\n");
+	  				   CDC_Transmit_FS((uint8_t*)text_buffer, strlen(text_buffer));
+	  				   for (uint16_t i = 0; i < n; i++) {
+	  					   snprintf(text_buffer, sizeof(text_buffer), "PPG Sample: %lu\r\n", ppg_samples_buffer[i]);
+	  					   CDC_Transmit_FS((uint8_t*)text_buffer, strlen(text_buffer));
+	  				   }
+	  			   }
+	  		   }
+	  		   break;
 
 	  	  case STATE_USB_CONNECTED:
 	  		break;
@@ -876,13 +896,11 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
 				// LED_Off(LED_GREEN); // Turn off the LED
 				break;
 			case STATE_USB_CONNECTED:
-        // ---> STAMPA DI TEST AGGIUNTA QUI <---
-        snprintf(text_buffer, sizeof(text_buffer), "[TEST] Pulsante premuto! USB Attiva!\r\n");
-        CDC_Transmit_FS((uint8_t*)text_buffer, strlen(text_buffer));
-
-				// // If USB is connected, start the download process.
-				// exit_flag = 0;
-				// current_state = STATE_DOWNLOAD;
+				// Start acquisition even when USB is connected
+        erase_memory();
+        if (PPG_StartAcquisition() == 1) {
+          current_state = STATE_ACQUISITION;
+        }
 				break;
 			default:
 				// Do nothing for other states (e.g., if button is pressed during DOWNLOAD).
@@ -902,24 +920,11 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
   // PPG interrupt is active-low: handle FIFO read when asserted
   if (GPIO_Pin == PPG_INT_Pin)
   {
-    uint32_t samples[32];
     LED_Toggle(LED_RED);
-    uint16_t n = PPG_HandleInterrupt(samples, 32);
-    // samples[0..n-1] now contain reconstructed 18-bit values
-    // Minimal handling: store first sample timestamped, or extend here to queue/process
-    // if (n > 0) {
-        // Optional: toggle a debug pin or set a flag for main loop processing
-          // Visual feedback
-    // }
-    // Send samples to UART for debugging
-    snprintf(text_buffer, sizeof(text_buffer), "INTERRUPT\r\n");
-    CDC_Transmit_FS((uint8_t*)text_buffer, strlen(text_buffer));
-    for (uint16_t i = 0; i < n; i++) {
-      snprintf(text_buffer, sizeof(text_buffer), "PPG Sample: %lu\r\n", samples[i]);
-      CDC_Transmit_FS((uint8_t*)text_buffer, strlen(text_buffer));
-    }
-
-    (void)n; // keep compiler happy if unused
+    // Read samples into the shared buffer; main loop will transmit via USB
+    uint16_t n = PPG_HandleInterrupt((uint32_t*)ppg_samples_buffer, 32);
+    ppg_samples_count = n;
+    ppg_data_ready = 1;
   }
 }
 
