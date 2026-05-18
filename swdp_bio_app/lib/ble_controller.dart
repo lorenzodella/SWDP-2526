@@ -284,8 +284,9 @@ class BleController extends ChangeNotifier {
             List<int> data = packetBuffer.sublist(0, fixedPacketLength);
             packetBuffer.removeRange(0, fixedPacketLength);
 
-            // TODO: check if it's a battery or a sensed data packet and forward to the corresponding stream (instead of always forwarding to sensedData stream)
-            _sensedDataController.add(data);
+            List<int> processedData = _processReceivedPacket(data);
+
+            _sensedDataController.add(processedData);
           }
         }, onError: (Object error) {
           debugPrint("RX error: $error");
@@ -297,6 +298,26 @@ class BleController extends ChangeNotifier {
         characteristicId: characteristicUuidTX,
         deviceId: deviceId);
     _txCharacteristic = txCharacteristic;
+  }
+
+  List<int> _processReceivedPacket(List<int> packet) {
+    if (packet[0] != 123 || packet[packet.length - 1] != 125) {
+      throw Exception("Invalid packet received: missing start/end delimiters");
+    }
+
+    List<int> result = [];
+
+    int packetType = packet[1]; //TODO: replace this int with an enum
+    // TODO: check if it's a battery or a sensed data packet and forward to the corresponding stream (instead of always forwarding to sensedData stream)
+    int packetLength = packet[2];
+
+    for (int i = 3; i < 4*packetLength + 2; i += 4) {
+      List<int> bytes = packet.sublist(i, i+4);
+      int value = bytes[0] << 24 | bytes[1] << 16 | bytes[2] << 8 | bytes[3];
+      result.add(value);
+    }
+
+    return result;
   }
 
   void _onDeviceDisconnected() {
