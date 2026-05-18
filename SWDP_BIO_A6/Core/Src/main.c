@@ -256,8 +256,9 @@ int main(void)
 	  				   snprintf(text_buffer, sizeof(text_buffer), "INTERRUPT\r\n");
 	  				   CDC_Transmit_FS((uint8_t*)text_buffer, strlen(text_buffer));
 	  				   for (uint16_t i = 0; i < n; i++) {
-	  					   snprintf(text_buffer, sizeof(text_buffer), "PPG Sample: %lu\r\n", ppg_samples_buffer[i]);
+	  					   snprintf(text_buffer, sizeof(text_buffer), "%d) PPG Sample: %lu\r\n", i, ppg_samples_buffer[i]);
 	  					   CDC_Transmit_FS((uint8_t*)text_buffer, strlen(text_buffer));
+                 HAL_Delay(10);
 	  				   }
 	  			   }
 	  		   }
@@ -835,7 +836,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
         // Send the accelerometer and gyroscope data via BLE
         // We are sending only the X-axis data
-        BLE_SendPacket(DATA_TYPE_IMU_ACCELERATION, raw_accelerometer);
+        // BLE_SendPacket(DATA_TYPE_IMU_ACCELERATION, raw_accelerometer, 6);
         //TODO: Change Gyro function
         //BLE_SendPacket(DATA_TYPE_IMU_GYROSCOPE, (uint32_t)gyroscope_data.x);
 
@@ -928,6 +929,8 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
     uint16_t n = PPG_HandleInterrupt((uint32_t*)ppg_samples_buffer, 32);
     ppg_samples_count = n;
     ppg_data_ready = 1;
+
+    BLE_SendPacket_PPG(DATA_TYPE_IMU_PPG, (uint32_t*)ppg_samples_buffer, ppg_samples_count);
   }
 }
 
