@@ -57,7 +57,7 @@ class BleController extends ChangeNotifier {
   DiscoveredDevice? _connectedDevice;
 
   final StreamController<int> _batteryLevelController = StreamController<int>.broadcast();
-  final StreamController<List<int>> _sensedDataController = StreamController<List<int>>.broadcast();
+  final StreamController<int> _sensedDataController = StreamController<int>.broadcast();
 
   //endregion
 
@@ -82,7 +82,7 @@ class BleController extends ChangeNotifier {
   /// Stream providing the battery level updates received from the connected device.
   Stream<int> get batteryLevelStream => _batteryLevelController.stream;
   /// Stream providing the sensed data received from the connected device.
-  Stream<List<int>> get sensedDataStream => _sensedDataController.stream;
+  Stream<int> get sensedDataStream => _sensedDataController.stream;
 
   /// Initializes the BLE-related permissions.
   /// Should be called before any BLE operation.
@@ -284,8 +284,7 @@ class BleController extends ChangeNotifier {
             List<int> data = packetBuffer.sublist(0, fixedPacketLength);
             packetBuffer.removeRange(0, fixedPacketLength);
 
-            // TODO: check if it's a battery or a sensed data packet and forward to the corresponding stream (instead of always forwarding to sensedData stream)
-            _sensedDataController.add(data);
+            _processReceivedPacket(data);
           }
         }, onError: (Object error) {
           debugPrint("RX error: $error");
@@ -297,6 +296,23 @@ class BleController extends ChangeNotifier {
         characteristicId: characteristicUuidTX,
         deviceId: deviceId);
     _txCharacteristic = txCharacteristic;
+  }
+
+  void _processReceivedPacket(List<int> packet) {
+    if (packet[0] != 123 || packet[packet.length - 1] != 125) {
+      throw Exception("Invalid packet received: missing start/end delimiters");
+    }
+
+    int packetType = packet[1]; //TODO: replace this int with an enum
+    // TODO: check if it's a battery or a sensed data packet and forward to the corresponding stream (instead of always forwarding to sensedData stream)
+    int packetLength = packet[2];
+
+    for (int i = 3; i < 4*packetLength + 2; i += 4) {
+      List<int> bytes = packet.sublist(i, i+4);
+      int value = bytes[0] << 24 | bytes[1] << 16 | bytes[2] << 8 | bytes[3];
+
+      _sensedDataController.add(value);
+    }
   }
 
   void _onDeviceDisconnected() {
