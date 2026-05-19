@@ -43,7 +43,7 @@ uint8_t PPG_Initialize(void)
     }
 
     // set FIFO_A_FULL threshold to 15 samples
-    if (!ppg_write_register(MAX30101_FIFO_CONFIG_REG, 0xF)) {
+    if (!ppg_write_register(MAX30101_FIFO_CONFIG_REG, MAX30101_FIFO_A_FULL_15)) {
         return 0;
     }
 

@@ -269,42 +269,44 @@ void BLE_SendPacket(BLE_DataType ble_data_type, uint8_t* data_buffer) {
  * @param value The 32-bit value to be sent.
  */
 void BLE_SendPacket_PPG(BLE_DataType ble_data_type, uint32_t* data_buffer, uint8_t sample_count) {
-    uint8_t num_packets = (sample_count * 4) / (PACKET_LENGTH - 4); // Calculate how many packets are needed
+    uint8_t samples_sent = 0;
 
-    for(uint8_t i = 0; i < num_packets; i++) {
+    while (sample_count > 0) {
         uint8_t samples_in_packet = (sample_count > 4) ? 4 : sample_count; // Max 4 samples per packet
         uint8_t ble_packet[PACKET_LENGTH];
 
         // Initialize the packet buffer
         ble_packet[0] = '{';
         ble_packet[PACKET_LENGTH - 1] = '}';
-        for (uint8_t i = 1; i < PACKET_LENGTH - 1; i++) {
-            ble_packet[i] = 0;
+        for (uint8_t j = 1; j < PACKET_LENGTH - 1; j++) {
+            ble_packet[j] = 0;
         }
 
         // Byte 1: Data type identifier
         switch (ble_data_type) {
             case DATA_TYPE_IMU_ACCELERATION:
-                return;
             case DATA_TYPE_IMU_GYROSCOPE:
-                return;
+                return; // Handled by other functions
             case DATA_TYPE_IMU_PPG:
                 ble_packet[1] = 'P';
                 ble_packet[2] = samples_in_packet; // Number of samples in this packet (max 4)
-                sample_count -= samples_in_packet; // Decrease the remaining sample count
                 break;  
             default:
                 ble_packet[1] = 'U'; // Unknown data type
                 break;
         }
 
-        // Bytes 3-19: The 32-bit value, packed in big-endian format
-        for (uint8_t i = 0; i < samples_in_packet; i++) {
-            ble_packet[3 + i*4] = (data_buffer[i] >> 24) & 0xFF; // MSB
-            ble_packet[4 + i*4] = (data_buffer[i] >> 16) & 0xFF;
-            ble_packet[5 + i*4] = (data_buffer[i] >> 8) & 0xFF;
-            ble_packet[6 + i*4] = (data_buffer[i] >> 0) & 0xFF; // LSB
+        // Bytes 3-18: The 32-bit values, packed in big-endian format
+        for (uint8_t j = 0; j < samples_in_packet; j++) {
+            uint32_t current_sample = data_buffer[samples_sent + j];
+            ble_packet[3 + j*4] = (current_sample >> 24) & 0xFF; // MSB
+            ble_packet[4 + j*4] = (current_sample >> 16) & 0xFF;
+            ble_packet[5 + j*4] = (current_sample >> 8) & 0xFF;
+            ble_packet[6 + j*4] = (current_sample >> 0) & 0xFF; // LSB
         }
+
+        samples_sent += samples_in_packet;
+        sample_count -= samples_in_packet;
 
         // Send the complete packet over UART
         BLE_SendData(ble_packet, sizeof(ble_packet));
