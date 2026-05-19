@@ -39,6 +39,8 @@
 #include "imu_driver.h"
 #include "ppg_driver.h"
 #include "bluetooth.h"
+#include "hr_algorithm.h"
+#include "usbd_cdc_if.h"
 
 /* USER CODE END Includes */
 
@@ -117,10 +119,17 @@ uint16_t tim = 0;
 // Buffer to print to serial monitor
 char text_buffer[64];
 
-// PPG data buffer for deferred USB transmission (populated in ISR, consumed in main loop)
-static volatile uint8_t ppg_data_ready = 0;
-static volatile uint16_t ppg_samples_count = 0;
-static uint32_t ppg_samples_buffer[32];
+// ---- PPG acquisition and circular buffer --------------------------------- //
+//
+// The FIFO interrupt fires when 17 samples are available (FIFO_A_FULL = 15).
+// ppg_acq_buf accumulates samples across ISR calls until PPG_ACQ_SIZE (32)
+// samples are collected.  At that point the circular buffer is updated with a
+// 50 % overlap shift and hr_ready_flag is raised for the main loop.
+//
+static volatile uint8_t  hr_ready_flag   = 0;
+static volatile uint16_t ppg_acq_idx     = 0;      /* fill index into acq buf  */
+static uint32_t ppg_acq_buf[PPG_ACQ_SIZE];          /* ISR-only accumulation    */
+static uint32_t ppg_circ_buf[PPG_CIRC_SIZE];        /* shared with main loop    */
 
 /* USER CODE END PV */
 
@@ -194,6 +203,8 @@ int main(void)
   spi_nand_init();
   find_bad_blocks(bad_blocks); // find bad_blocks and save them
 
+  HR_Algorithm_Init();
+
   if (PPG_Initialize() != 1) {
     // MAX30101 initialization failed, blink red LED for 2 seconds
     LED_Toggle(LED_RED);
@@ -229,25 +240,16 @@ int main(void)
 	  switch(current_state)
 	  {
 	  	  case STATE_ACQUISITION:
-            // All data acquisition is handled by the timer interrupt (PPG) and periodic timer (IMU).
-            // USB transmission is handled here to avoid calling CDC_Transmit_FS from ISR context.
-            // if (usb_flag)
-            // {
-            //   LED_On(LED_GREEN);
-            //   if (ppg_data_ready)
-            //   {
-            //     ppg_data_ready = 0;
-            //     uint16_t n = ppg_samples_count;
-            //     snprintf(text_buffer, sizeof(text_buffer), "INTERRUPT\r\n");
-            //     CDC_Transmit_FS((uint8_t*)text_buffer, strlen(text_buffer));
-            //     for (uint16_t i = 0; i < n; i++) {
-            //       snprintf(text_buffer, sizeof(text_buffer), "%d) PPG Sample: %lu\r\n", i, ppg_samples_buffer[i]);
-            //       CDC_Transmit_FS((uint8_t*)text_buffer, strlen(text_buffer));
-            //       HAL_Delay(10);
-            //     }
-            //   }
-            // }
-
+            if (hr_ready_flag) {
+              hr_ready_flag = 0;
+              float32_t bpm = HR_Process(ppg_circ_buf);
+              //if (bpm > 0.0f) {
+                // int len = snprintf(text_buffer, sizeof(text_buffer), "HR: %.1f BPM\r\n", bpm);
+                //CDC_Transmit_FS((uint8_t *)text_buffer, len);
+                // BLE_SendData((uint8_t *)text_buffer, (uint8_t)len);
+              //}
+              BLE_SendPacket_PPG(DATA_TYPE_IMU_PPG, ppg_circ_buf + PPG_ACQ_SIZE, PPG_ACQ_SIZE);
+            }
             break;
         default:
             break;
@@ -861,6 +863,7 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
         erase_memory();
         if (PPG_StartAcquisition() == 1) {
           // HAL_GPIO_WritePin(GPIOB, PPG_INT_Pin, GPIO_PIN_SET);
+          HR_Algorithm_Init();
           current_state = STATE_ACQUISITION;
           // HAL_TIM_Base_Start_IT(&htim2); // Start the timer for periodic data reading
           // LED_On(LED_GREEN); // Provide visual feedback for starting acquisition
@@ -870,7 +873,8 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
 				// Stop the PPG sensor before changing state so the INT line goes quiet
 				PPG_StopAcquisition();
         LED_Off(LED_RED);
-				ppg_data_ready = 0;
+				hr_ready_flag = 0;
+        ppg_acq_idx = 0;
 				current_state = STATE_IDLE;
 				// HAL_TIM_Base_Stop_IT(&htim2); // Stop the timer
 				// LED_Off(LED_GREEN); // Turn off the LED
@@ -890,16 +894,33 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
     return;
   }
 
-  // PPG interrupt is active-low: handle FIFO read when asserted
+  // PPG interrupt is active-low: accumulate samples and update circular buffer
   if (GPIO_Pin == PPG_INT_Pin && current_state == STATE_ACQUISITION)
   {
     LED_Toggle(LED_RED);
-    // Read samples into the shared buffer; main loop will transmit via USB
-    uint16_t n = PPG_HandleInterrupt((uint32_t*)ppg_samples_buffer, 32);
-    ppg_samples_count = n;
-    ppg_data_ready = 1;
 
-    BLE_SendPacket_PPG(DATA_TYPE_IMU_PPG, (uint32_t*)ppg_samples_buffer, ppg_samples_count);
+    // Read up to PPG_ACQ_SIZE raw samples from the sensor FIFO
+    static uint32_t tmp_ppg[PPG_ACQ_SIZE];
+    uint16_t n = PPG_HandleInterrupt(tmp_ppg, PPG_ACQ_SIZE);
+
+    // Accumulate into acquisition buffer; trigger when full
+    for (uint16_t i = 0u; i < n; i++) {
+      ppg_acq_buf[ppg_acq_idx] = tmp_ppg[i];
+      ppg_acq_idx++;
+
+      if (ppg_acq_idx >= PPG_ACQ_SIZE) {
+        // Shift circular buffer left by one half (50 % overlap)
+        for (uint16_t j = 0u; j < PPG_ACQ_SIZE; j++) {
+          ppg_circ_buf[j] = ppg_circ_buf[PPG_ACQ_SIZE + j];
+        }
+        // Copy fresh batch into the second half
+        for (uint16_t j = 0u; j < PPG_ACQ_SIZE; j++) {
+          ppg_circ_buf[PPG_ACQ_SIZE + j] = ppg_acq_buf[j];
+        }
+        hr_ready_flag = 1;
+        ppg_acq_idx   = 0u;
+      }
+    }
   }
 }
 

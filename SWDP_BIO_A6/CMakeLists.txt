@@ -50,6 +50,10 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/led_driver.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/Memory_operations.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/SPI_NAND.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/hr_algorithm.c
+    # CMSIS-DSP biquad filter
+    ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS/DSP/Source/FilteringFunctions/arm_biquad_cascade_df1_f32.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS/DSP/Source/FilteringFunctions/arm_biquad_cascade_df1_init_f32.c
     ${CMAKE_CURRENT_SOURCE_DIR}/USB_Device/App/usbd_cdc_if.c
     ${CMAKE_CURRENT_SOURCE_DIR}/USB_Device/App/usbd_desc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/USB_Device/App/usb_device.c
@@ -58,22 +62,22 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/USB_Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c
     ${CMAKE_CURRENT_SOURCE_DIR}/USB_Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ioreq.c
     ${CMAKE_CURRENT_SOURCE_DIR}/USB_Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c
-    # Add user defined sources
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS/DSP/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/USB_Device/App
     ${CMAKE_CURRENT_SOURCE_DIR}/USB_Device/Target
     ${CMAKE_CURRENT_SOURCE_DIR}/USB_Middlewares/ST/STM32_USB_Device_Library/Core/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/USB_Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
-    # Add user defined include paths
 )
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined symbols
+    # arm_math.h (CMSIS-DSP v1.6.0) auto-detects the target via __ARM_FEATURE_DSP
+    # which GCC sets when compiling with -mcpu=cortex-m33.  No explicit define needed.
 )
 
 # Remove wrong libob.a library dependency when using cpp files
