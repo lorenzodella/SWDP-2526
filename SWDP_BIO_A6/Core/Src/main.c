@@ -41,6 +41,7 @@
 #include "bluetooth.h"
 #include "hr_algorithm.h"
 #include "usbd_cdc_if.h"
+#include <stdint.h>
 
 /* USER CODE END Includes */
 
@@ -243,12 +244,14 @@ int main(void)
             if (hr_ready_flag) {
               hr_ready_flag = 0;
               float32_t bpm = HR_Process(ppg_circ_buf);
+              uint8_t bpm_int = (uint8_t)(bpm + 0.5f); // Round to nearest integer
               //if (bpm > 0.0f) {
                 // int len = snprintf(text_buffer, sizeof(text_buffer), "HR: %.1f BPM\r\n", bpm);
                 //CDC_Transmit_FS((uint8_t *)text_buffer, len);
                 // BLE_SendData((uint8_t *)text_buffer, (uint8_t)len);
               //}
               BLE_SendPacket_PPG(DATA_TYPE_IMU_PPG, ppg_circ_buf + PPG_ACQ_SIZE, PPG_ACQ_SIZE);
+              BLE_SendPacket(DATA_TYPE_HR, &bpm_int);
             }
             break;
         default:
