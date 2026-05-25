@@ -303,6 +303,8 @@ class BleController extends ChangeNotifier {
       throw Exception("Invalid packet received: missing start/end delimiters");
     }
 
+    // print(packet);
+
     int packetType = packet[1]; //TODO: replace this int with an enum
     // TODO: check if it's a battery or a sensed data packet and forward to the corresponding stream (instead of always forwarding to sensedData stream)
     int packetLength = packet[2];

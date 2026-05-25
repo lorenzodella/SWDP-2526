@@ -31,8 +31,7 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "../../USB_Device/App/usb_device.h"
-#include <bluetooth.h>
+
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -98,10 +97,8 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
 // This enum defines the possible states for the main application logic.
 typedef enum {
-    STATE_IDLE,          // The device is waiting for a command or event.
-    STATE_ACQUISITION,   // The device is actively collecting sensor data.
-    STATE_USB_CONNECTED, // The device is connected to a computer via USB.
-    STATE_DOWNLOAD       // The device is in the process of downloading data.
+    STATE_IDLE,             // Waiting for button press.
+    STATE_ACQUISITION,      // PPG sampling + HR processing + BLE streaming.
 } AppState;
 /* USER CODE END Private defines */
 

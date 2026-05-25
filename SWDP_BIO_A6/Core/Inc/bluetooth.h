@@ -9,23 +9,13 @@
  * RN4871 BLE module.
  */
 
-#include "stdio.h"
-#include "stdint.h"
+#include <stdint.h>
 
 // --- Constants Definitions ---
 // These are standard values used for the BLE communication packets and timeouts.
 #define PACKET_LENGTH 20    // Maximum length of a data packet
 #define TEXT_LENGTH 500     // Maximum length for text strings
 #define UART_TIMEOUT 1000   // Timeout in milliseconds for UART operations
-
-// --- Enumerations ---
-// This enum defines the possible types of data packets that can be sent.
-typedef enum {
-    DATA_TYPE_IMU_ACCELERATION, // Indicates acceleration data from an IMU
-    DATA_TYPE_IMU_GYROSCOPE,     // Indicates gyroscope data from an IMU
-    DATA_TYPE_IMU_PPG,        // Indicates PPG data from a photoplethysmography sensor
-    DATA_TYPE_HR
-} BLE_DataType;
 
 // --- Function Prototypes ---
 // These are the public functions available for use.
@@ -38,7 +28,10 @@ void BLE_ExitLowPowerMode(void);
 void BLE_SetSlowAdvertisements(void);
 void BLE_SendData(uint8_t* data, uint8_t data_length);
 void BLE_ReceiveData(uint8_t* data, uint8_t data_length);
-void BLE_SendPacket(BLE_DataType ble_data_type, uint8_t* data_buffer);
-void BLE_SendPacket_PPG(BLE_DataType ble_data_type, uint32_t* data_buffer, uint8_t sample_count);
+
+void BLE_SendPacket_Acceleration(uint16_t aX, uint16_t aY, uint16_t aZ);
+void BLE_SendPacket_Gyroscope(uint16_t gX, uint16_t gY, uint16_t gZ);
+void BLE_SendPacket_PPG(uint32_t* data_buffer, uint8_t sample_count);
+void BLE_SendPacket_HR(uint8_t bpm);
 
 #endif /* INC_BLUETOOTH_H_ */

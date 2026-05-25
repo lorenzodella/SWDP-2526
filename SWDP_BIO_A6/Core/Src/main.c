@@ -2,22 +2,7 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main application file for MainBoard_IMU_Logger project.
-  ******************************************************************************
-  * @functionality  : This firmware implements a complete Data Logger for the on board IMU.
-  * @details        : The application operates using a State Machine triggered by a
-  * single USER BUTTON. It performs three primary tasks:
-  * 1. Real-time Acquisition: Reads Accelerometer/Gyroscope data
-  * via I2C, synchronized by a TIM2 interrupt.
-  * 2. Wireless Transmission: Sends data packets via Bluetooth Low Energy (BLE)
-  * using the UART interface.
-  * 3. Data Logging: Saves acquired data to NAND Flash memory.
-  *
-  * Saved data can be downloaded via a USB Virtual COM Port (VCP)
-  * connection, also initiated by the USER BUTTON.
-  *
-  * @intended_use   : Starting template for Smart Wearables Course
-  * exploring IMU interfacing, BLE communication, and memory management.
+  * @brief          : Main application file — PPG Heart Rate Monitor with BLE.
   ******************************************************************************
   */
 /* USER CODE END Header */
@@ -26,23 +11,23 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "bluetooth.h"
+#include "hr_algorithm.h"
+#include "imu_driver.h"
+#include "led_driver.h"
+#include "Memory_operations.h"
+#include "ppg_driver.h"
+#include "SPI.h"
+#include "SPI_NAND.h"
 #include "stm32u5xx_hal.h"
 #include "stm32u5xx_hal_gpio.h"
 #include "stm32u5xx_hal_uart.h"
-#include "string.h"
-#include "stdio.h"
-#include "../../USB_Device/App/usb_device.h"
-#include "SPI.h"
-#include "SPI_NAND.h"
-#include "Memory_operations.h"
-#include "led_driver.h"
-#include "imu_driver.h"
-#include "ppg_driver.h"
-#include "bluetooth.h"
-#include "hr_algorithm.h"
 #include "usbd_cdc_if.h"
-#include <stdint.h>
-
+#include "../../USB_Device/App/usb_device.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -89,41 +74,10 @@ static AppState current_state = STATE_IDLE;
 // Set to 1 when a USB connection is detected.
 uint8_t usb_flag = 0;
 
-// IMU data structures for accelerometer and gyroscope.
-static IMU_Data accelerometer_data;
-static IMU_Data gyroscope_data;
-
-uint8_t raw_accelerometer[6] = {0};
-uint8_t raw_gyroscope[6] = {0};
-
-/// ----- NAND FLASH variables ----- ///
-
-uint8_t NAND_packet[4096] = {0};
-uint16_t sample = 0;
-uint16_t blocco_scritto = 0;
-uint8_t pagina_scritta=0;
-uint16_t b = 0;
-
-read_address_t blocco;
-column_address_t colonna = 0;
-
-uint16_t bad_blocks[2048]={-1}; // bad blocks array for writing/reading
-uint8_t bad_blocks2[2048]={0}; // bad blocks array for erasing
-
-uint8_t data_letto[4096] = {0};
-int exit_flag = 0;
-
-// Timestamp variables //
-Time_Struct timestamp;
-uint16_t tim = 0;
-
-// Buffer to print to serial monitor
-char text_buffer[64];
-
 // ---- PPG acquisition and circular buffer --------------------------------- //
 //
 // The FIFO interrupt fires when 17 samples are available (FIFO_A_FULL = 15).
-// ppg_acq_buf accumulates samples across ISR calls until PPG_ACQ_SIZE (32)
+// ppg_acq_buf accumulates samples across ISR calls until PPG_ACQ_SIZE
 // samples are collected.  At that point the circular buffer is updated with a
 // 50 % overlap shift and hr_ready_flag is raised for the main loop.
 //
@@ -196,13 +150,10 @@ int main(void)
   // Turn the RED LED on to indicate the start of the initialization process
   LED_On(LED_RED);
 
-  // Initialize all hardware peripherals (ble, usb, nand flash, imu)
+  // Initialize hardware peripherals
   BLE_Initialize();
   MX_USB_Device_Init();
   HAL_Delay(1000);
-
-  spi_nand_init();
-  find_bad_blocks(bad_blocks); // find bad_blocks and save them
 
   HR_Algorithm_Init();
 
@@ -245,13 +196,9 @@ int main(void)
               hr_ready_flag = 0;
               float32_t bpm = HR_Process(ppg_circ_buf);
               uint8_t bpm_int = (uint8_t)(bpm + 0.5f); // Round to nearest integer
-              //if (bpm > 0.0f) {
-                // int len = snprintf(text_buffer, sizeof(text_buffer), "HR: %.1f BPM\r\n", bpm);
-                //CDC_Transmit_FS((uint8_t *)text_buffer, len);
-                // BLE_SendData((uint8_t *)text_buffer, (uint8_t)len);
-              //}
-              BLE_SendPacket_PPG(DATA_TYPE_IMU_PPG, ppg_circ_buf + PPG_ACQ_SIZE, PPG_ACQ_SIZE);
-              BLE_SendPacket(DATA_TYPE_HR, &bpm_int);
+
+              BLE_SendPacket_PPG(ppg_circ_buf + PPG_ACQ_SIZE, PPG_ACQ_SIZE);
+              // BLE_SendPacket_HR(bpm_int);
             }
             break;
         default:
@@ -804,49 +751,13 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 /**
   * @brief  Callback function for the timer period elapsed event.
-  * This function is triggered by a hardware timer at a fixed interval.
+  *         Not used in the current application (TIM2 is disabled).
   * @param  htim: Pointer to the timer handle.
   */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-	if(htim == &htim2){
-
-        // Read sensor data from the IMU
-        IMU_ReadAccelerometerData(&accelerometer_data, raw_accelerometer);
-        IMU_ReadGyroscopeData(&gyroscope_data, raw_gyroscope);
-
-        // Send the accelerometer and gyroscope data via BLE
-        // We are sending only the X-axis data
-        // BLE_SendPacket(DATA_TYPE_IMU_ACCELERATION, raw_accelerometer, 6);
-        //TODO: Change Gyro function
-        //BLE_SendPacket(DATA_TYPE_IMU_GYROSCOPE, (uint32_t)gyroscope_data.x);
-
-        // Save the raw accelerometer and gyroscope data in memory
-        // Create timestamp with sampling frequency @100 Hz
-        timestamp.sss=tim*10;
-		if(timestamp.sss == 1000) {
-			timestamp.ss=timestamp.ss+1;
-			timestamp.sss= 0;
-			tim = 0;
-			if (timestamp.ss==60){
-				timestamp.mm=timestamp.mm+1;
-				timestamp.ss=0;
-				if (timestamp.mm==60){
-					timestamp.hh=timestamp.hh+1;
-					timestamp.mm=0;
-				}
-			}
-		}
-
-		tim++;
-
-		// Create the data packet to be saved in memory
-		write_packet(sample, timestamp, raw_accelerometer, raw_gyroscope, NAND_packet);
-		sample++;
-		// Write data packet in memory
-        write_memory();
-
-	}
+  /* TIM2 is not started in this application — keep for future use */
+  (void)htim;
 }
 
 
@@ -863,13 +774,9 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
 		switch(current_state) {
 			case STATE_IDLE:
 				// If the device is idle, start data acquisition.
-        erase_memory();
         if (PPG_StartAcquisition() == 1) {
-          // HAL_GPIO_WritePin(GPIOB, PPG_INT_Pin, GPIO_PIN_SET);
           HR_Algorithm_Init();
           current_state = STATE_ACQUISITION;
-          // HAL_TIM_Base_Start_IT(&htim2); // Start the timer for periodic data reading
-          // LED_On(LED_GREEN); // Provide visual feedback for starting acquisition
         }
 			break;
 			case STATE_ACQUISITION:
@@ -879,11 +786,8 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
 				hr_ready_flag = 0;
         ppg_acq_idx = 0;
 				current_state = STATE_IDLE;
-				// HAL_TIM_Base_Stop_IT(&htim2); // Stop the timer
-				// LED_Off(LED_GREEN); // Turn off the LED
 				break;
 			default:
-				// Do nothing for other states (e.g., if button is pressed during DOWNLOAD).
 				break;
 		}
 	}
@@ -892,12 +796,6 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
 // Falling Edge when User Button is not pressed
 void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 {
-  if(GPIO_Pin == USER_BUTTON_Pin)
-  {
-    return;
-  }
-
-  // PPG interrupt is active-low: accumulate samples and update circular buffer
   if (GPIO_Pin == PPG_INT_Pin && current_state == STATE_ACQUISITION)
   {
     LED_Toggle(LED_RED);
@@ -913,6 +811,7 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 
       if (ppg_acq_idx >= PPG_ACQ_SIZE) {
         // Shift circular buffer left by one half (50 % overlap)
+        __disable_irq();
         for (uint16_t j = 0u; j < PPG_ACQ_SIZE; j++) {
           ppg_circ_buf[j] = ppg_circ_buf[PPG_ACQ_SIZE + j];
         }
@@ -920,6 +819,7 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
         for (uint16_t j = 0u; j < PPG_ACQ_SIZE; j++) {
           ppg_circ_buf[PPG_ACQ_SIZE + j] = ppg_acq_buf[j];
         }
+        __enable_irq();
         hr_ready_flag = 1;
         ppg_acq_idx   = 0u;
       }

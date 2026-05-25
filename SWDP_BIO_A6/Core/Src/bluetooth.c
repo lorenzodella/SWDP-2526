@@ -19,9 +19,10 @@
  * Flow Control: Disabled
  */
 
-#include <bluetooth.h>
-#include <stdint.h>
+#include "bluetooth.h"
 #include "main.h"
+#include <stdint.h>
+#include <string.h>
 
 extern UART_HandleTypeDef huart3;
 
@@ -218,57 +219,73 @@ void BLE_ReceiveData(uint8_t* data, uint8_t data_length) {
 }
 
 /**
- * @brief Sends a structured data packet with a specific type and value.
- *
- * This function creates a standardized packet format to send specific sensor data.
- * The packet format is: { | Type | MSB of Value | ... | LSB of Value | ... | }
- * @param type The type of data being sent (e.g., acceleration, gyroscope).
- * @param value The 32-bit value to be sent.
+ * @brief Sends the given acceleration data as a structured packet over BLE.
+ * The packet format is: { | 'A' | aX LSB | aX MSB | aY LSB | aY MSB | aZ LSB | aZ MSB | ... }
+ * where 'A' indicates that the packet contains acceleration data.
  */
-void BLE_SendPacket(BLE_DataType ble_data_type, uint8_t* data_buffer) {
+void BLE_SendPacket_Acceleration(uint16_t aX, uint16_t aY, uint16_t aZ) {
     uint8_t ble_packet[PACKET_LENGTH];
 
     // Initialize the packet buffer
     ble_packet[0] = '{';
+    memset(&ble_packet[1], 0, PACKET_LENGTH - 2);
     ble_packet[PACKET_LENGTH - 1] = '}';
-    for (uint8_t i = 1; i < PACKET_LENGTH - 1; i++) {
-        ble_packet[i] = 0;
-    }
 
     // Byte 1: Data type identifier
-    switch (ble_data_type) {
-        case DATA_TYPE_IMU_ACCELERATION:
-            ble_packet[1] = 'A';
-            break;
-        case DATA_TYPE_IMU_GYROSCOPE:
-            ble_packet[1] = 'G';
-            break;
-        default:
-            ble_packet[1] = 'U'; // Unknown data type
-            break;
-    }
+    // ('A' for Acceleration data)
+    ble_packet[1] = 'A';
 
-    // Bytes 2-4: The 32-bit value, packed in big-endian format
-    ble_packet[2] = data_buffer[0]; // X Axis LSB
-    ble_packet[3] = data_buffer[1]; // X Axis MSB
-    ble_packet[4] = data_buffer[2]; // Y Axis LSB
-    ble_packet[5] = data_buffer[3]; // Y Axis MSB
-    ble_packet[6] = data_buffer[4]; // Z Axis LSB
-    ble_packet[7] = data_buffer[5]; // Z Axis MSB
+    // Payload
+    ble_packet[2] = (uint8_t)(aX & 0xFF);        // aX LSB
+    ble_packet[3] = (uint8_t)((aX >> 8) & 0xFF); // aX MSB
+    ble_packet[4] = (uint8_t)(aY & 0xFF);        // aY LSB
+    ble_packet[5] = (uint8_t)((aY >> 8) & 0xFF); // aY MSB
+    ble_packet[6] = (uint8_t)(aZ & 0xFF);        // aZ LSB
+    ble_packet[7] = (uint8_t)((aZ >> 8) & 0xFF); // aZ MSB
 
     // Send the complete packet over UART
     BLE_SendData(ble_packet, sizeof(ble_packet));
 }
 
 /**
- * @brief Sends a structured data packet with a specific type and value.
- *
- * This function creates a standardized packet format to send specific sensor data.
- * The packet format is: { | Type | MSB of Value | ... | LSB of Value | ... | }
- * @param type The type of data being sent (e.g., acceleration, gyroscope).
- * @param value The 32-bit value to be sent.
+ * @brief Sends the given gyroscope data as a structured packet over BLE.
+ * The packet format is: { | 'G' | gX LSB | gX MSB | gY LSB | gY MSB | gZ LSB | gZ MSB | ... }
+ * where 'G' indicates that the packet contains gyroscope data.
  */
-void BLE_SendPacket_PPG(BLE_DataType ble_data_type, uint32_t* data_buffer, uint8_t sample_count) {
+void BLE_SendPacket_Gyroscope(uint16_t gX, uint16_t gY, uint16_t gZ) {
+    uint8_t ble_packet[PACKET_LENGTH];
+
+    // Initialize the packet buffer
+    ble_packet[0] = '{';
+    memset(&ble_packet[1], 0, PACKET_LENGTH - 2);
+    ble_packet[PACKET_LENGTH - 1] = '}';
+
+    // Byte 1: Data type identifier
+    // ('G' for Gyroscope data)
+    ble_packet[1] = 'G';
+
+    // Payload
+    ble_packet[2] = (uint8_t)(gX & 0xFF);        // gX LSB
+    ble_packet[3] = (uint8_t)((gX >> 8) & 0xFF); // gX MSB
+    ble_packet[4] = (uint8_t)(gY & 0xFF);        // gY LSB
+    ble_packet[5] = (uint8_t)((gY >> 8) & 0xFF); // gY MSB
+    ble_packet[6] = (uint8_t)(gZ & 0xFF);        // gZ LSB
+    ble_packet[7] = (uint8_t)((gZ >> 8) & 0xFF); // gZ MSB
+
+    // Send the complete packet over UART
+    BLE_SendData(ble_packet, sizeof(ble_packet));
+}
+
+/**
+ * @brief Sends a batch of PPG samples as structured packets over BLE.
+ *
+ * Packet format: { | 'P' | sample_count (≤4) | up to 4 × uint32_t BE | padding | }
+ * If sample_count > 4, multiple packets are sent automatically.
+ *
+ * @param data_buffer Pointer to array of uint32_t PPG samples.
+ * @param sample_count Number of samples to send.
+ */
+void BLE_SendPacket_PPG(uint32_t* data_buffer, uint8_t sample_count) {
     uint8_t samples_sent = 0;
 
     while (sample_count > 0) {
@@ -277,24 +294,15 @@ void BLE_SendPacket_PPG(BLE_DataType ble_data_type, uint32_t* data_buffer, uint8
 
         // Initialize the packet buffer
         ble_packet[0] = '{';
+        memset(&ble_packet[1], 0, PACKET_LENGTH - 2);
         ble_packet[PACKET_LENGTH - 1] = '}';
-        for (uint8_t j = 1; j < PACKET_LENGTH - 1; j++) {
-            ble_packet[j] = 0;
-        }
 
         // Byte 1: Data type identifier
-        switch (ble_data_type) {
-            case DATA_TYPE_IMU_ACCELERATION:
-            case DATA_TYPE_IMU_GYROSCOPE:
-                return; // Handled by other functions
-            case DATA_TYPE_IMU_PPG:
-                ble_packet[1] = 'P';
-                ble_packet[2] = samples_in_packet; // Number of samples in this packet (max 4)
-                break;  
-            default:
-                ble_packet[1] = 'U'; // Unknown data type
-                break;
-        }
+        // ('P' for PPG data)
+        ble_packet[1] = 'P';
+
+        // Byte 2: Number of samples in this packet
+        ble_packet[2] = samples_in_packet;
 
         // Bytes 3-18: The 32-bit values, packed in big-endian format
         for (uint8_t j = 0; j < samples_in_packet; j++) {
@@ -312,6 +320,32 @@ void BLE_SendPacket_PPG(BLE_DataType ble_data_type, uint32_t* data_buffer, uint8
         BLE_SendData(ble_packet, sizeof(ble_packet));
     }
 }
+
+/**
+ * @brief Sends the heart rate data as structured packets over BLE.
+ *
+ * Packet format: { | 'H' | bpm | }
+ * @param bpm Heart rate value in BPM.
+ */
+void BLE_SendPacket_HR(uint8_t bpm) {
+    uint8_t ble_packet[PACKET_LENGTH];
+
+    // Initialize the packet buffer
+    ble_packet[0] = '{';
+    memset(&ble_packet[1], 0, PACKET_LENGTH - 2);
+    ble_packet[PACKET_LENGTH - 1] = '}';
+
+    // Byte 1: Data type identifier
+    // ('H' for Heart Rate data)
+    ble_packet[1] = 'H';
+
+    // Byte 2: Heart rate value in BPM
+    ble_packet[2] = bpm;
+
+    // Send the complete packet over UART
+    BLE_SendData(ble_packet, sizeof(ble_packet));
+}
+
 
 // --- Helper Function Implementations ---
 // These helper functions encapsulate common, repeated tasks to improve code clarity.

@@ -14,7 +14,6 @@
 #include "SPI_NAND.h"
 #include "Memory_operations.h"
 
-NAND_info data;
 //void write_packet(uint8_t sample, RTC_TimeTypeDef sTime, uint8_t *magnetometer, uint8_t *pressure, uint8_t *temp, uint8_t *gyroscope,uint8_t *accelerometer, uint8_t *gyroscope2,uint8_t *accelerometer2,uint8_t *ppg_sample, uint8_t *NAND_packet);
 
 // todo:

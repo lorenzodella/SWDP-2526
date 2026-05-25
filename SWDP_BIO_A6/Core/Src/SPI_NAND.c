@@ -26,26 +26,9 @@
 #include "main.h"
 #include "SPI.h"
 #include "SPI_NAND.h"
-#include "Memory_operations.h"
-#include "../../USB_Device/App/usb_device.h"
 
 //extern SPI_HandleTypeDef hspi3;
 extern SPI_HandleTypeDef hspi2;
-
-// extern variables memory
-extern uint8_t NAND_packet[4096];
-extern uint16_t sample;
-extern uint16_t blocco_scritto;
-extern uint8_t pagina_scritta;
-extern uint16_t b;
-extern uint16_t bad_blocks[2048];
-extern read_address_t blocco;
-extern column_address_t colonna;
-extern uint8_t bad_blocks2[2048];
-extern uint8_t data_letto[4096];
-extern int exit_flag;
-
-static AppState current_state;
 
 // SPI basic functions
 void cs_deselect(void);
@@ -716,72 +699,78 @@ int spi_write(uint8_t *write_buff, size_t write_len, uint32_t timeout_ms)
 }
 
 
-void write_memory()
-{
-	if(sample == SAMPLES_PER_PAGE){ // Arrived at the end of the page
+/*
+ * High-level NAND operations temporarily disabled during refactoring.
+ * The low-level driver above (init, read, program, erase block) remains
+ * fully functional. To re-enable, re-add the extern variables from main.c
+ * and coordinate with Memory_operations.c.
+ */
+// void write_memory()
+// {
+// 	if(sample == SAMPLES_PER_PAGE){ // Arrived at the end of the page
 
-		sample = 0;
+// 		sample = 0;
 
-		if(pagina_scritta >= 64){ // End of the block, increment block
-			pagina_scritta = 0;
-			b++;
-		}
+// 		if(pagina_scritta >= 64){ // End of the block, increment block
+// 			pagina_scritta = 0;
+// 			b++;
+// 		}
 
-		if(b==2048){ // memory full
-			current_state = STATE_IDLE;
-		}
+// 		if(b==2048){ // memory full
+// 			current_state = STATE_IDLE;
+// 		}
 
-		// write 1 page at the time
-		blocco_scritto = bad_blocks[b];
-		blocco.block = blocco_scritto;
-		blocco.page = pagina_scritta;
-		blocco.dummy = 0;
-		colonna = 0;
+// 		// write 1 page at the time
+// 		blocco_scritto = bad_blocks[b];
+// 		blocco.block = blocco_scritto;
+// 		blocco.page = pagina_scritta;
+// 		blocco.dummy = 0;
+// 		colonna = 0;
 
-		spi_nand_page_program(blocco, colonna, NAND_packet, 4096);
+// 		spi_nand_page_program(blocco, colonna, NAND_packet, 4096);
 
-		pagina_scritta++;
+// 		pagina_scritta++;
 
-		memset(NAND_packet, 0, sizeof(NAND_packet));
-	}
+// 		memset(NAND_packet, 0, sizeof(NAND_packet));
+// 	}
 
-}
+// }
 
-void read_memory_and_transmit()
-{
-		for(int bloc = 0; bloc < 2048; bloc++) { // Cycle on all the memory blocks (2048)
-			if(exit_flag == 0){
-			blocco.block = bad_blocks[bloc]; // Read only good blocks
+// void read_memory_and_transmit()
+// {
+// 		for(int bloc = 0; bloc < 2048; bloc++) { // Cycle on all the memory blocks (2048)
+// 			if(exit_flag == 0){
+// 			blocco.block = bad_blocks[bloc]; // Read only good blocks
 
-		for(int pag = 0; pag < 64; pag++) {// Cycle on all pages in each block (64)
-			blocco.page = pag;
-			colonna = 0;
-			// Save data of the page into data_letto
-			spi_nand_page_read(blocco, colonna, data_letto, sizeof(data_letto));
+// 		for(int pag = 0; pag < 64; pag++) {// Cycle on all pages in each block (64)
+// 			blocco.page = pag;
+// 			colonna = 0;
+// 			// Save data of the page into data_letto
+// 			spi_nand_page_read(blocco, colonna, data_letto, sizeof(data_letto));
 
-			if(data_letto[0] == 255) {
-				// in this case exit condition is if the first element is 255 but can be adapted
-				// for example you can store the #block and #page that you have written and read until those #
-				current_state = STATE_USB_CONNECTED;
+// 			if(data_letto[0] == 255) {
+// 				// in this case exit condition is if the first element is 255 but can be adapted
+// 				// for example you can store the #block and #page that you have written and read until those #
+// 				current_state = STATE_USB_CONNECTED;
 
-				uint8_t buffer[1] = { 'T' };  // Termination Char compatible with the PC script
-				CDC_Transmit_FS(buffer, sizeof(buffer));  // Send 1 byte: 'T'
+// 				uint8_t buffer[1] = { 'T' };  // Termination Char compatible with the PC script
+// 				CDC_Transmit_FS(buffer, sizeof(buffer));  // Send 1 byte: 'T'
 
-				exit_flag = 1;
-				break; // exit cycle
-			}
+// 				exit_flag = 1;
+// 				break; // exit cycle
+// 			}
 
-			CDC_Transmit_FS(data_letto, sizeof(data_letto)); // Send data via USB
-			HAL_Delay(10); // wait some time
-		}
-		}
-	}
-}
+// 			CDC_Transmit_FS(data_letto, sizeof(data_letto)); // Send data via USB
+// 			HAL_Delay(10); // wait some time
+// 		}
+// 		}
+// 	}
+// }
 
-void erase_memory()
-{
-	erase_good_blocks(bad_blocks2); // Erase bad_blocks (set all memory to 0xFF)
-}
+// void erase_memory()
+// {
+// 	erase_good_blocks(bad_blocks2); // Erase bad_blocks (set all memory to 0xFF)
+// }
 
 
 
