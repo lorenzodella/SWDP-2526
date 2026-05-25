@@ -321,6 +321,44 @@ void BLE_SendPacket_PPG(uint32_t* data_buffer, uint8_t sample_count) {
     }
 }
 
+void BLE_SendPacket_PPG_Filtered(float32_t* data_buffer, uint8_t sample_count) {
+    uint8_t samples_sent = 0;
+
+    while (sample_count > 0) {
+        uint8_t samples_in_packet = (sample_count > 4) ? 4 : sample_count; // Max 4 samples per packet
+        uint8_t ble_packet[PACKET_LENGTH];
+
+        // Initialize the packet buffer
+        ble_packet[0] = '{';
+        memset(&ble_packet[1], 0, PACKET_LENGTH - 2);
+        ble_packet[PACKET_LENGTH - 1] = '}';
+
+        // Byte 1: Data type identifier
+        // ('F' for Filtered PPG data)
+        ble_packet[1] = 'F';
+
+        // Byte 2: Number of samples in this packet
+        ble_packet[2] = samples_in_packet;
+
+        // Bytes 3-18: The 32-bit values (float), packed in big-endian format
+        for (uint8_t j = 0; j < samples_in_packet; j++) {
+            uint32_t current_sample;
+            memcpy(&current_sample, &data_buffer[samples_sent + j], sizeof(uint32_t));
+            
+            ble_packet[3 + j*4] = (current_sample >> 24) & 0xFF; // MSB
+            ble_packet[4 + j*4] = (current_sample >> 16) & 0xFF;
+            ble_packet[5 + j*4] = (current_sample >> 8) & 0xFF;
+            ble_packet[6 + j*4] = (current_sample >> 0) & 0xFF; // LSB
+        }
+
+        samples_sent += samples_in_packet;
+        sample_count -= samples_in_packet;
+
+        // Send the complete packet over UART
+        BLE_SendData(ble_packet, sizeof(ble_packet));
+    }
+}
+
 /**
  * @brief Sends the heart rate data as structured packets over BLE.
  *

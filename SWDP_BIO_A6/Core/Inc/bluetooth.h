@@ -10,6 +10,7 @@
  */
 
 #include <stdint.h>
+#include "arm_math.h"
 
 // --- Constants Definitions ---
 // These are standard values used for the BLE communication packets and timeouts.
@@ -32,6 +33,7 @@ void BLE_ReceiveData(uint8_t* data, uint8_t data_length);
 void BLE_SendPacket_Acceleration(uint16_t aX, uint16_t aY, uint16_t aZ);
 void BLE_SendPacket_Gyroscope(uint16_t gX, uint16_t gY, uint16_t gZ);
 void BLE_SendPacket_PPG(uint32_t* data_buffer, uint8_t sample_count);
+void BLE_SendPacket_PPG_Filtered(float32_t* data_buffer, uint8_t sample_count);
 void BLE_SendPacket_HR(uint8_t bpm);
 
 #endif /* INC_BLUETOOTH_H_ */

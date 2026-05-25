@@ -86,6 +86,9 @@ static volatile uint16_t ppg_acq_idx     = 0;      /* fill index into acq buf  *
 static uint32_t ppg_acq_buf[PPG_ACQ_SIZE];          /* ISR-only accumulation    */
 static uint32_t ppg_circ_buf[PPG_CIRC_SIZE];        /* shared with main loop    */
 
+static uint8_t registered_heart_rates[REGISTERED_HR_SAMPLES_SIZE] = {0};
+static uint8_t registered_hr_idx = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -196,9 +199,25 @@ int main(void)
               hr_ready_flag = 0;
               float32_t bpm = HR_Process(ppg_circ_buf);
               uint8_t bpm_int = (uint8_t)(bpm + 0.5f); // Round to nearest integer
+              
+              // Store the BPM in the registered heart rates array
+              registered_heart_rates[registered_hr_idx] = bpm_int;
+              // Increase the registered hr_index with wrap around
+              if (registered_hr_idx == REGISTERED_HR_SAMPLES_SIZE - 1) {
+                registered_hr_idx = 0;
+              } else {
+                registered_hr_idx++;
+              }
 
-              BLE_SendPacket_PPG(ppg_circ_buf + PPG_ACQ_SIZE, PPG_ACQ_SIZE);
-              // BLE_SendPacket_HR(bpm_int);
+              // Compute the average of the registered heart rates and return it
+              uint32_t hr_sum = 0;
+              for (uint8_t i = 0; i < REGISTERED_HR_SAMPLES_SIZE; i++) {
+                hr_sum += registered_heart_rates[i];
+              }
+              uint8_t hr_avg = (uint8_t)((hr_sum / REGISTERED_HR_SAMPLES_SIZE) + 0.5f); // Round to nearest integer
+
+              // BLE_SendPacket_PPG(ppg_circ_buf + PPG_ACQ_SIZE, PPG_ACQ_SIZE);
+              BLE_SendPacket_HR(hr_avg);
             }
             break;
         default:

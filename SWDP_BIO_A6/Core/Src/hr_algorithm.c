@@ -9,8 +9,6 @@
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
-
-//TODO: tempo
 #include "bluetooth.h"
 
 /* ── Dimensioni del framework (Override o allineamento alle macro globali) ── */
@@ -92,12 +90,12 @@ float32_t HR_Process(const uint32_t *circ_buf)
                                filtered_buf + PPG_ACQ_SIZE_LOCAL,
                                PPG_ACQ_SIZE_LOCAL);
 
-    // //TODO: temporary
-    // uint32_t to_send[PPG_ACQ_SIZE_LOCAL];
-    // for (uint32_t i = PPG_ACQ_SIZE_LOCAL; i < PPG_CIRC_SIZE_LOCAL; i++) {
-    //     to_send[i - PPG_ACQ_SIZE_LOCAL] = (uint32_t)filtered_buf[i];
-    // }
-    // BLE_SendPacket_PPG(to_send, PPG_ACQ_SIZE_LOCAL);
+    // Send PPG Filtered data to the mobile app for visualization
+    float32_t to_send[PPG_ACQ_SIZE_LOCAL];
+    for (uint32_t i = PPG_ACQ_SIZE_LOCAL; i < PPG_CIRC_SIZE_LOCAL; i++) {
+        to_send[i - PPG_ACQ_SIZE_LOCAL] = filtered_buf[i];
+    }
+    BLE_SendPacket_PPG_Filtered(to_send, PPG_ACQ_SIZE_LOCAL);
 
     /* 4. Soglia adattativa basata sulla deviazione standard del segnale filtrato.
      *    La soglia è 1.5× la deviazione standard — i picchi di rumore raramente
@@ -120,11 +118,11 @@ float32_t HR_Process(const uint32_t *circ_buf)
 
     float32_t std_dev = sqrtf(variance);
 
-    /* Soglia = 1.5× la deviazione standard del segnale filtrato */
-    float32_t threshold = std_dev * 1.5f;
+    /* Soglia = 1.0× la deviazione standard del segnale filtrato per il test */
+    float32_t threshold = std_dev * 1.0f;
 
     /* Squelch assoluto: se σ è troppo bassa, non c'è dito sul sensore */
-    if (std_dev < 500.0f) {
+    if (std_dev < 10.0f) {
         total_sample_cnt += PPG_ACQ_SIZE_LOCAL;
         current_bpm = 0.0f;   /* Invalida la lettura precedente */
         return current_bpm;

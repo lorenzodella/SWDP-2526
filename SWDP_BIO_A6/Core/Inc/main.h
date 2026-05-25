@@ -100,6 +100,8 @@ typedef enum {
     STATE_IDLE,             // Waiting for button press.
     STATE_ACQUISITION,      // PPG sampling + HR processing + BLE streaming.
 } AppState;
+
+#define REGISTERED_HR_SAMPLES_SIZE = 5
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

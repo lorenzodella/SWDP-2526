@@ -14,7 +14,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<int>? _batteryLevelSubscription;
-  StreamSubscription<int>? _sensedDataSubscription;
+  StreamSubscription<double>? _sensedDataSubscription;
 
   final double _maxPoints = 1000;
   int _samplesCounter = 0;
@@ -92,7 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
     debugPrint("New battery level: $newLevel");
   }
 
-  void _onNewSensedData(int newData) {
+  void _onNewSensedData(double newData) {
     //TODO: replace with proper implementation
 
     // maintain a sliding window of the last _maxPoints data points for the chart
@@ -102,10 +102,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // add the new data point to the chart data window
     setState(() {
-      _chartDataWindow.add(PpgDataPoint(_samplesCounter.toDouble(), newData.toDouble()));
+      _chartDataWindow.add(PpgDataPoint(_samplesCounter.toDouble(), newData));
       _samplesCounter++;
     });
-
-    debugPrint("New sensed data: $newData");
   }
 }

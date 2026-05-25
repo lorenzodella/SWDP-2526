@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
@@ -57,7 +58,7 @@ class BleController extends ChangeNotifier {
   DiscoveredDevice? _connectedDevice;
 
   final StreamController<int> _batteryLevelController = StreamController<int>.broadcast();
-  final StreamController<int> _sensedDataController = StreamController<int>.broadcast();
+  final StreamController<double> _sensedDataController = StreamController<double>.broadcast();
 
   //endregion
 
@@ -82,7 +83,7 @@ class BleController extends ChangeNotifier {
   /// Stream providing the battery level updates received from the connected device.
   Stream<int> get batteryLevelStream => _batteryLevelController.stream;
   /// Stream providing the sensed data received from the connected device.
-  Stream<int> get sensedDataStream => _sensedDataController.stream;
+  Stream<double> get sensedDataStream => _sensedDataController.stream;
 
   /// Initializes the BLE-related permissions.
   /// Should be called before any BLE operation.
@@ -306,12 +307,22 @@ class BleController extends ChangeNotifier {
     // print(packet);
 
     int packetType = packet[1]; //TODO: replace this int with an enum
+
+    if (packetType != 70) {
+      print(packet);
+      return;
+    }
+
     // TODO: check if it's a battery or a sensed data packet and forward to the corresponding stream (instead of always forwarding to sensedData stream)
     int packetLength = packet[2];
 
-    for (int i = 3; i < 4*packetLength + 2; i += 4) {
-      List<int> bytes = packet.sublist(i, i+4);
-      int value = bytes[0] << 24 | bytes[1] << 16 | bytes[2] << 8 | bytes[3];
+    for (int i = 3; i < 4 * packetLength + 2; i += 4) {
+      // Extract the 4 bytes corresponding to the current float value
+      List<int> bytes = packet.sublist(i, i + 4);
+      ByteData byteData = ByteData.sublistView(Uint8List.fromList(bytes));
+
+      // convert the bytes to a float value (assuming big-endian byte order)
+      double value = byteData.getFloat32(0, Endian.big);
 
       _sensedDataController.add(value);
     }
