@@ -55,6 +55,7 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern DMA_HandleTypeDef handle_LPDMA1_Channel0;
 extern MDF_HandleTypeDef MdfHandle0;
 extern SPI_HandleTypeDef hspi2;
 extern SPI_HandleTypeDef hspi3;
@@ -372,6 +373,20 @@ void MDF1_FLT0_IRQHandler(void)
   /* USER CODE BEGIN MDF1_FLT0_IRQn 1 */
 
   /* USER CODE END MDF1_FLT0_IRQn 1 */
+}
+
+/**
+  * @brief This function handles LPDMA1 SmartRun Channel 0 global interrupt.
+  */
+void LPDMA1_Channel0_IRQHandler(void)
+{
+  /* USER CODE BEGIN LPDMA1_Channel0_IRQn 0 */
+
+  /* USER CODE END LPDMA1_Channel0_IRQn 0 */
+  HAL_DMA_IRQHandler(&handle_LPDMA1_Channel0);
+  /* USER CODE BEGIN LPDMA1_Channel0_IRQn 1 */
+
+  /* USER CODE END LPDMA1_Channel0_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

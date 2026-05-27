@@ -72,6 +72,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/USB_Device/Target
     ${CMAKE_CURRENT_SOURCE_DIR}/USB_Middlewares/ST/STM32_USB_Device_Library/Core/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/USB_Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/LPBAM/LpbamAp1
 )
 
 # Add project symbols (macros)

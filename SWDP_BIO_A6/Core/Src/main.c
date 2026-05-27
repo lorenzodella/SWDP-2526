@@ -25,9 +25,11 @@
 #include "SPI_NAND.h"
 #include "stm32u5xx_hal.h"
 #include "stm32u5xx_hal_gpio.h"
+#include "stm32u5xx_hal_pwr_ex.h"
 #include "stm32u5xx_hal_uart.h"
 #include "usbd_cdc_if.h"
 #include "../../USB_Device/App/usb_device.h"
+#include "lpbam_lpbamap1.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -63,6 +65,8 @@ UART_HandleTypeDef huart3;
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
+DMA_HandleTypeDef handle_LPDMA1_Channel0;
+LPTIM_HandleTypeDef hlptim1;
 /* USER CODE BEGIN PV */
 
 // --- State Machine ---
@@ -89,19 +93,22 @@ static uint32_t ppg_circ_buf[PPG_CIRC_SIZE];        /* shared with main loop    
 static uint8_t registered_heart_rates[REGISTERED_HR_SAMPLES_SIZE] = {0};
 static uint8_t registered_hr_idx = 0;
 
+uint8_t DataRegisterBuffer[1] __attribute__((section(".sram4"))) = {0x00};
+uint8_t TempDataBuff[2] __attribute__((section(".sram4"))) = {0x00, 0x00};
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_ICACHE_Init(void);
 static void MX_I2C3_Init(void);
-static void MX_USART3_UART_Init(void);
-static void MX_USB_OTG_FS_PCD_Init(void);
+static void MX_ICACHE_Init(void);
 static void MX_MDF1_Init(void);
-static void MX_TIM2_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_SPI3_Init(void);
+static void MX_TIM2_Init(void);
+static void MX_USART3_UART_Init(void);
+static void MX_USB_OTG_FS_PCD_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -140,14 +147,14 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_ICACHE_Init();
   MX_I2C3_Init();
-  MX_USART3_UART_Init();
-  MX_USB_OTG_FS_PCD_Init();
+  MX_ICACHE_Init();
   MX_MDF1_Init();
-  MX_TIM2_Init();
   MX_SPI2_Init();
   MX_SPI3_Init();
+  MX_TIM2_Init();
+  MX_USART3_UART_Init();
+  MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
 
   // Turn the RED LED on to indicate the start of the initialization process
@@ -179,6 +186,16 @@ int main(void)
   // Turn off the red LED to indicate that initialization is complete
   LED_Off(LED_RED);
 
+  // Initialize the LPBAM scenario for the temperature sensor
+  MX_LpbamAp1_Init();
+  MX_LpbamAp1_LPScenario_Init();
+  MX_LpbamAp1_LPScenario_Build();
+  MX_LpbamAp1_LPScenario_Link(&handle_LPDMA1_Channel0);
+  MX_LpbamAp1_LPScenario_Start(&handle_LPDMA1_Channel0);
+  // HAL_DBGMCU_EnableDBGStopMode();
+  __HAL_RCC_PWR_CLK_ENABLE();
+  HAL_LPTIM_TimeOut_Start(&hlptim1, 0xFFFF);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -192,8 +209,14 @@ int main(void)
 		//LED_Toggle(LED_GREEN);
 		//HAL_Delay(1000);
 
+    LED_Toggle(LED_GREEN);
+    HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+    LED_Toggle(LED_GREEN);
+
 	  switch(current_state)
 	  {
+        // case STATE_IDLE:
+        //     break;
 	  	  case STATE_ACQUISITION:
             if (hr_ready_flag) {
               hr_ready_flag = 0;
@@ -727,7 +750,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : PPG_INT_Pin */
   GPIO_InitStruct.Pin = PPG_INT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(PPG_INT_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : MCU_I_O_2_Pin MCU_I_O_1_Pin */
@@ -837,6 +860,19 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
         ppg_acq_idx   = 0u;
       }
     }
+  }
+}
+
+void HAL_DMA_XferCpltCallback(DMA_HandleTypeDef *hdma)
+{
+  /* This callback can be used to handle DMA transfer completion events.
+     Not used in the current application but can be implemented for future
+     features such as autonomous SPI data transfers. */
+  if(hdma == &handle_LPDMA1_Channel0)
+  {
+    // Handle completion of DMA transfer for SPI3 (e.g., PPG data acquisition)
+    // This is a placeholder for future implementation if autonomous mode is used.
+    BLE_SendPacket_HR(TempDataBuff[1]); // Example: send the first byte of the buffer as heart rate data
   }
 }
 

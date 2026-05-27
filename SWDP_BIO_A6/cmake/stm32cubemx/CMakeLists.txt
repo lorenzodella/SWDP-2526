@@ -10,7 +10,10 @@ set(MX_Defines_Syms
 
 # STM32CubeMX generated include paths
 set(MX_Include_Dirs
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../LPBAM/LpbamAp1
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Utilities/lpbam
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Utilities/lpbam/STM32U5
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Inc/Legacy
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/CMSIS/Device/ST/STM32U5xx/Include
@@ -19,6 +22,9 @@ set(MX_Include_Dirs
 
 # STM32CubeMX generated application sources
 set(MX_Application_Src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../LPBAM/LpbamAp1/lpbam_lpbamap1_lpscenario_config.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../LPBAM/LpbamAp1/lpbam_lpbamap1_config.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../LPBAM/LpbamAp1/lpbam_lpbamap1_lpscenario_build.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32u5xx_it.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32u5xx_hal_msp.c
@@ -30,12 +36,13 @@ set(MX_Application_Src
 # STM32 HAL/LL Drivers
 set(STM32_Drivers_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/system_stm32u5xx.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_cortex.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_ramcfg.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_i2c.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_i2c_ex.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_rcc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_rcc_ex.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_cortex.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_flash.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_flash_ex.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_gpio.c
@@ -46,6 +53,7 @@ set(STM32_Drivers_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_pwr_ex.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_gtzc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_icache.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_lptim.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_mdf.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_spi.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_spi_ex.c
@@ -61,6 +69,13 @@ set(STM32_Drivers_Src
 # Drivers Midllewares
 
 
+set(Utilities_Src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Utilities/lpbam/stm32_adv_lpbam_common.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Utilities/lpbam/STM32U5/stm32_ll_lpbam.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Utilities/lpbam/stm32_lpbam_common.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Utilities/lpbam/stm32_adv_lpbam_i2c.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Utilities/lpbam/stm32_lpbam_i2c.c
+)
 
 # Link directories setup
 set(MX_LINK_DIRS
@@ -70,7 +85,7 @@ set(MX_LINK_DIRS
 set(MX_LINK_LIBS 
     STM32_Drivers
     ${TOOLCHAIN_LINK_LIBRARIES}
-    
+    Utilities	
 )
 # Interface library for includes and symbols
 add_library(stm32cubemx INTERFACE)
@@ -82,6 +97,11 @@ add_library(STM32_Drivers OBJECT)
 target_sources(STM32_Drivers PRIVATE ${STM32_Drivers_Src})
 target_link_libraries(STM32_Drivers PUBLIC stm32cubemx)
 
+
+# Create Utilities static library
+add_library(Utilities OBJECT)
+target_sources(Utilities PRIVATE ${Utilities_Src})
+target_link_libraries(Utilities PUBLIC stm32cubemx)
 
 # Add STM32CubeMX generated application sources to the project
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${MX_Application_Src})

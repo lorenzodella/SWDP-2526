@@ -36,7 +36,8 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-
+extern uint8_t DataRegisterBuffer[1];
+extern uint8_t TempDataBuff[2];
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
