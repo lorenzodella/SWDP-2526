@@ -830,15 +830,9 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 
       if (ppg_acq_idx >= PPG_ACQ_SIZE) {
         // Shift circular buffer left by one half (50 % overlap)
-        __disable_irq();
-        for (uint16_t j = 0u; j < PPG_ACQ_SIZE; j++) {
-          ppg_circ_buf[j] = ppg_circ_buf[PPG_ACQ_SIZE + j];
-        }
+        memcpy(ppg_circ_buf, ppg_circ_buf + PPG_ACQ_SIZE, PPG_ACQ_SIZE * sizeof(uint32_t));
         // Copy fresh batch into the second half
-        for (uint16_t j = 0u; j < PPG_ACQ_SIZE; j++) {
-          ppg_circ_buf[PPG_ACQ_SIZE + j] = ppg_acq_buf[j];
-        }
-        __enable_irq();
+        memcpy(ppg_circ_buf + PPG_ACQ_SIZE, ppg_acq_buf, PPG_ACQ_SIZE * sizeof(uint32_t));
         hr_ready_flag = 1;
         ppg_acq_idx   = 0u;
       }

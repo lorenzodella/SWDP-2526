@@ -101,7 +101,7 @@ typedef enum {
     STATE_ACQUISITION,      // PPG sampling + HR processing + BLE streaming.
 } AppState;
 
-#define REGISTERED_HR_SAMPLES_SIZE = 5
+#define REGISTERED_HR_SAMPLES_SIZE 5
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
