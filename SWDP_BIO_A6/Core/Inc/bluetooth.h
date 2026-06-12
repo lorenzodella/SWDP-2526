@@ -35,5 +35,6 @@ void BLE_SendPacket_Gyroscope(uint16_t gX, uint16_t gY, uint16_t gZ);
 void BLE_SendPacket_PPG(uint32_t* data_buffer, uint8_t sample_count);
 void BLE_SendPacket_PPG_Filtered(float32_t* data_buffer, uint8_t sample_count);
 void BLE_SendPacket_HR(uint8_t bpm);
+void BLE_SendPacket_Temperature(float32_t temperature);
 
 #endif /* INC_BLUETOOTH_H_ */
