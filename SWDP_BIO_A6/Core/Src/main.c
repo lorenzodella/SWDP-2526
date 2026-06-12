@@ -11,6 +11,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -27,6 +28,7 @@
 #include "stm32u5xx_hal_gpio.h"
 #include "stm32u5xx_hal_uart.h"
 #include "usbd_cdc_if.h"
+#include "tempsens_driver.h"
 #include "../../USB_Device/App/usb_device.h"
 /* USER CODE END Includes */
 
@@ -88,6 +90,10 @@ static uint32_t ppg_circ_buf[PPG_CIRC_SIZE];        /* shared with main loop    
 
 static uint8_t registered_heart_rates[REGISTERED_HR_SAMPLES_SIZE] = {0};
 static uint8_t registered_hr_idx = 0;
+
+static uint32_t temp_timer = 0;
+static uint8_t flag_temp = 0;
+static float temp_value = 60;
 
 /* USER CODE END PV */
 
@@ -179,6 +185,9 @@ int main(void)
   // Turn off the red LED to indicate that initialization is complete
   LED_Off(LED_RED);
 
+  //Initialize temperture sensor
+  Temp_Init();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -194,6 +203,28 @@ int main(void)
 
 	  switch(current_state)
 	  {
+        case STATE_IDLE:
+          if ((HAL_GetTick() - temp_timer) >= 10000) 
+          {
+            // 3. Salvi il tempo attuale come nuovo punto di partenza per i prossimi 30s
+            temp_timer = HAL_GetTick();
+
+            //mando One-Shot
+            MAX30205_StartOneShot();
+
+            // Aspetta almeno 50 ms per completare la conversione su tmep reg
+            HAL_Delay(55);
+
+            //read temp value and do the convertion to °C
+            MAX30205_GetTemperature(&temp_value);
+
+            //Send it via BLE
+            BLE_SendPacket_Temperature(temp_value);
+
+          }
+        
+        break;
+
 	  	  case STATE_ACQUISITION:
             if (hr_ready_flag) {
               hr_ready_flag = 0;
@@ -218,6 +249,27 @@ int main(void)
 
               // BLE_SendPacket_PPG(ppg_circ_buf + PPG_ACQ_SIZE, PPG_ACQ_SIZE);
               BLE_SendPacket_HR(hr_avg);
+            }
+
+            if (flag_temp == 0 && (HAL_GetTick() - temp_timer) >= 10000) 
+            {
+              // 3. Salvi il tempo attuale come nuovo punto di partenza per i prossimi 30s
+              temp_timer = HAL_GetTick();
+
+              //mando One-Shot
+              MAX30205_StartOneShot();
+
+              flag_temp=1;
+            }
+
+            if (flag_temp == 1 && (HAL_GetTick()-temp_timer) >=55){
+              flag_temp =0;
+              //read temp value and do the convertion to °C
+              MAX30205_GetTemperature(&temp_value);
+
+              //Send it via BLE
+              BLE_SendPacket_Temperature(temp_value);
+
             }
             break;
         default:
@@ -796,6 +848,7 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
         if (PPG_StartAcquisition() == 1) {
           HR_Algorithm_Init();
           current_state = STATE_ACQUISITION;
+          temp_timer=0;
         }
 			break;
 			case STATE_ACQUISITION:

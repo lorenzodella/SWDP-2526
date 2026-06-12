@@ -1,116 +1,70 @@
-/**
- * \file tempsens_driver.c
- * \brief MAX30101 internal die temperature driver.
- *
- * TIM2 interrupt fires at its configured period; TempSens_TimerCallback()
- * checks whether 30 s have elapsed (via HAL_GetTick) and sets a flag.
- * TempSens_Process(), called from the main loop, performs the I2C transfer
- * when the flag is set: it triggers a one-shot conversion (TEMP_EN), waits
- * the 29 ms acquisition time, then reads TINT + TFRAC.
- */
-
 #include "tempsens_driver.h"
-#include "ppg_driver.h"   /* MAX30101_I2C_ADDRESS, MAX30101_I2C_TIMEOUT */
+#include "arm_math.h"
+#include "stm32u5xx_hal.h"
+#include <math.h>
 
 extern I2C_HandleTypeDef hi2c3;
-extern TIM_HandleTypeDef htim2;
 
-/* MAX30101 temperature register addresses (datasheet Table, pp. 21-22) */
-#define REG_INT_STATUS2   0x01   /* bit 1 = DIE_TEMP_RDY                 */
-#define REG_TEMP_INTEGER  0x1F   /* TINT[7:0] — two's-complement, 1 °C/bit */
-#define REG_TEMP_FRACTION 0x20   /* TFRAC[3:0] — 0.0625 °C/bit           */
-#define REG_TEMP_CONFIG   0x21   /* bit 0 = TEMP_EN (self-clearing)       */
 
-#define TEMP_EN_BIT       0x01u
-#define TEMP_RDY_BIT      0x02u  /* DIE_TEMP_RDY in INT_STATUS_2          */
-#define TEMP_INTERVAL_MS  30000u /* 30-second sample period               */
-#define TEMP_CONV_MS      30u    /* ≥ 29 ms acquisition time (datasheet)  */
-
-static volatile uint8_t temp_pending = 0;
-static float32_t      last_temp    = 0.0f;
-static uint32_t         last_tick    = 0;
-
-/* ------------------------------------------------------------------ */
-/* Internal helpers                                                     */
-/* ------------------------------------------------------------------ */
-
-static uint8_t write_reg(uint8_t reg, uint8_t val)
+static uint8_t temp_write_register(uint8_t reg_addr, uint8_t reg_data)
 {
-    uint8_t buf[2] = {reg, val};
-    return HAL_I2C_Master_Transmit(&hi2c3,
-                                   MAX30101_I2C_ADDRESS << 1,
-                                   buf, sizeof(buf),
-                                   MAX30101_I2C_TIMEOUT) == HAL_OK;
-}
+    uint8_t tx_buffer[] = { reg_addr, reg_data };
 
-static uint8_t read_reg(uint8_t reg, uint8_t *out)
-{
-    return HAL_I2C_Mem_Read(&hi2c3,
-                            MAX30101_I2C_ADDRESS << 1,
-                            reg, I2C_MEMADD_SIZE_8BIT,
-                            out, 1,
-                            MAX30101_I2C_TIMEOUT) == HAL_OK;
-}
-
-/* ------------------------------------------------------------------ */
-/* Public API                                                           */
-/* ------------------------------------------------------------------ */
-
-void TempSens_Init(void)
-{
-    last_tick = HAL_GetTick();
-
-    /* TIM2 IRQ is routed in stm32u5xx_it.c but NVIC was never armed. */
-    HAL_NVIC_SetPriority(TIM2_IRQn, 3, 0);
-    HAL_NVIC_EnableIRQ(TIM2_IRQn);
-
-    HAL_TIM_Base_Start_IT(&htim2);
-}
-
-/**
- * Call from HAL_TIM_PeriodElapsedCallback in main.c.
- * Sets temp_pending after every 30-second window; no I2C work here.
- */
-void TempSens_TimerCallback(TIM_HandleTypeDef *htim)
-{
-    if (htim->Instance != TIM2) return;
-
-    uint32_t now = HAL_GetTick();
-    if ((now - last_tick) >= TEMP_INTERVAL_MS) {
-        last_tick    = now;
-        temp_pending = 1;
+    if (HAL_I2C_Master_Transmit(&hi2c3, (MAX30205_I2C_ADDRESS << 1), tx_buffer, sizeof(tx_buffer), MAX30205_I2C_TIMEOUT) != HAL_OK) {
+        return 0; 
     }
+
+    return 1; 
+}
+
+static uint8_t temp_read_register(uint8_t reg_addr, uint8_t *data, uint16_t data_len)
+{
+    if (HAL_I2C_Mem_Read(&hi2c3, (MAX30205_I2C_ADDRESS << 1), reg_addr, I2C_MEMADD_SIZE_8BIT, data, data_len, MAX30205_I2C_TIMEOUT) != HAL_OK) {
+        return 0; 
+    }
+
+    return 1; 
+}
+
+
+
+/**
+ * @brief Configura il sensore in modalità Shutdown durante il boot.
+ */
+uint8_t Temp_Init(void)
+{
+    // Scrive 0x01 nel registro di configurazione (Attiva il bit D0 di Shutdown)
+    return temp_write_register(MAX30205_REG_CONF, 0x01);
 }
 
 /**
- * Call from the main loop.
- * Triggers a one-shot conversion, waits for the ADC, reads TINT + TFRAC.
- * Blocks for ~30 ms when a reading is due; returns immediately otherwise.
+ * @brief Sveglia il sensore per una singola conversione.
  */
-void TempSens_Process(void)
+uint8_t MAX30205_StartOneShot(void)
 {
-    if (!temp_pending) return;
-    temp_pending = 0;
-
-    /* Trigger a single conversion — TEMP_EN self-clears when done. */
-    if (!write_reg(REG_TEMP_CONFIG, TEMP_EN_BIT)) return;
-
-    /* Wait for acquisition (datasheet: T_T = 29 ms typ at 25 °C). */
-    HAL_Delay(TEMP_CONV_MS);
-
-    /* Read integer part (two's complement, 1 °C resolution). */
-    uint8_t t_int = 0;
-    if (!read_reg(REG_TEMP_INTEGER, &t_int)) return;
-
-    /* Read fractional part (0.0625 °C per LSB, always positive).
-     * Reading TFRAC also clears the DIE_TEMP_RDY interrupt flag. */
-    uint8_t t_frac = 0;
-    if (!read_reg(REG_TEMP_FRACTION, &t_frac)) return;
-
-    last_temp = (float32_t)(int8_t)t_int + (float32_t)(t_frac & 0x0Fu) * 0.0625f;
+    // Scrive 0x81 (Bit D7 One-Shot + Bit D0 Shutdown attivo)
+    return temp_write_register(MAX30205_REG_CONF, 0x81);
 }
 
-float32_t TempSens_GetLast(void)
+/**
+ * @brief Legge i 2 byte di temperatura e calcola il valore float in °C.
+ * @param[out] temperature_celsius Puntatore alla variabile dove salvare la temperatura.
+ * @return 1 in caso di successo, 0 in caso di errore I2C.
+ */
+uint8_t MAX30205_GetTemperature(float *temperature_celsius)
 {
-    return last_temp;
+    uint8_t raw_data[2] = {0, 0};
+
+    // Legge 2 byte partendo dal registro della temperatura (0x00)
+    if (!temp_read_register(MAX30205_REG_TEMP, raw_data, 2)) {
+        return 0; // Errore di lettura
+    }
+
+    // Ricostruisce il dato a 16 bit con segno (raw_data[0] è MSB, raw_data[1] è LSB)
+    int16_t temp_raw = (int16_t)((raw_data[0] << 8) | raw_data[1]);
+
+    // Converte il dato grezzo moltiplicandolo per la risoluzione (0.00390625 °C)
+    *temperature_celsius = (float)temp_raw * 0.00390625f;
+
+    return 1; // Successo
 }

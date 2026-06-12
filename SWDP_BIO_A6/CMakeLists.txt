@@ -51,6 +51,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/Memory_operations.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/SPI_NAND.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/hr_algorithm.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/tempsens_driver.c
     # CMSIS-DSP biquad filter
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS/DSP/Source/FilteringFunctions/arm_biquad_cascade_df1_f32.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS/DSP/Source/FilteringFunctions/arm_biquad_cascade_df1_init_f32.c
