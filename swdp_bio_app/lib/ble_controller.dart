@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:swdp_bio_app/packet_type.dart';
 
 //region --- BLE Service and Characteristic UUIDs ---
 // These are the specific addresses for the BLE device RN4871 (Microchip) on the board.
@@ -13,11 +14,7 @@ final Uuid characteristicUuidTX = Uuid.parse("49535343-8841-43F4-A8D4-ECBE34729B
 //endregion
 
 /// Enum representing the current BLE connection status.
-enum BleConnectionStatus {
-  disconnected,
-  connecting,
-  connected
-}
+enum BleConnectionStatus { disconnected, connecting, connected }
 
 /// Singleton class responsible for managing all BLE-related operations.
 class BleController extends ChangeNotifier {
@@ -57,8 +54,14 @@ class BleController extends ChangeNotifier {
   final List<DiscoveredDevice> _foundBleDevicesFiltered = [];
   DiscoveredDevice? _connectedDevice;
 
-  final StreamController<int> _batteryLevelController = StreamController<int>.broadcast();
-  final StreamController<double> _sensedDataController = StreamController<double>.broadcast();
+  final StreamController<double> _ppgDataController =
+      StreamController<double>.broadcast();
+  final StreamController<double> _filteredPpgDataController =
+      StreamController<double>.broadcast();
+  final StreamController<int> _heartRateController =
+      StreamController<int>.broadcast();
+  final StreamController<double> _temperatureController =
+      StreamController<double>.broadcast();
 
   //endregion
 
@@ -66,11 +69,13 @@ class BleController extends ChangeNotifier {
 
   /// Whether the necessary permissions for BLE operations have been granted.
   bool get permissionsGranted => _permGranted;
+
   /// Whether any of the necessary permissions for BLE operations have been permanently denied.
   bool get permissionsPermanentlyDenied => _permPermanentlyDenied;
 
   /// Whether a BLE scan is currently in progress.
   bool get scanning => _scanning;
+
   /// The current BLE connection status.
   BleConnectionStatus get connectionStatus => _connectionStatus;
 
@@ -80,10 +85,17 @@ class BleController extends ChangeNotifier {
   /// The currently connected BLE device, or null if no device is connected.
   DiscoveredDevice? get connectedDevice => _connectedDevice;
 
-  /// Stream providing the battery level updates received from the connected device.
-  Stream<int> get batteryLevelStream => _batteryLevelController.stream;
-  /// Stream providing the sensed data received from the connected device.
-  Stream<double> get sensedDataStream => _sensedDataController.stream;
+  /// Stream providing the PPG data received from the connected device.
+  Stream<double> get ppgDataStream => _ppgDataController.stream;
+
+  /// Stream providing the filtered PPG data received from the connected device.
+  Stream<double> get filteredPpgDataStream => _filteredPpgDataController.stream;
+
+  /// Stream providing the heart rate updates received from the connected device.
+  Stream<int> get heartRateStream => _heartRateController.stream;
+
+  /// Stream providing the temperature updates received from the connected device.
+  Stream<double> get temperatureStream => _temperatureController.stream;
 
   /// Initializes the BLE-related permissions.
   /// Should be called before any BLE operation.
@@ -91,20 +103,18 @@ class BleController extends ChangeNotifier {
     Map<Permission, PermissionStatus> statuses = await [
       Permission.bluetoothScan,
       Permission.locationWhenInUse,
-      Permission.bluetoothConnect
+      Permission.bluetoothConnect,
     ].request();
 
-    _permGranted = (
-      statuses[Permission.bluetoothScan] == PermissionStatus.granted &&
-      statuses[Permission.bluetoothConnect] == PermissionStatus.granted &&
-      statuses[Permission.locationWhenInUse] == PermissionStatus.granted
-    );
-    
-    _permPermanentlyDenied = (
-      statuses[Permission.bluetoothScan] == PermissionStatus.permanentlyDenied ||
-      statuses[Permission.bluetoothConnect] == PermissionStatus.permanentlyDenied ||
-      statuses[Permission.locationWhenInUse] == PermissionStatus.permanentlyDenied
-    );
+    _permGranted =
+        (statuses[Permission.bluetoothScan] == PermissionStatus.granted &&
+        statuses[Permission.bluetoothConnect] == PermissionStatus.granted &&
+        statuses[Permission.locationWhenInUse] == PermissionStatus.granted);
+
+    _permPermanentlyDenied =
+        (statuses[Permission.bluetoothScan] == PermissionStatus.permanentlyDenied ||
+        statuses[Permission.bluetoothConnect] == PermissionStatus.permanentlyDenied ||
+        statuses[Permission.locationWhenInUse] == PermissionStatus.permanentlyDenied);
 
     notifyListeners();
   }
@@ -128,22 +138,26 @@ class BleController extends ChangeNotifier {
     _scanning = true;
     notifyListeners();
 
-    _scanStream = _ble.scanForDevices(
-        withServices: [/* serviceUuid */])  //TODO: uncomment once we've ensured the firmware uses the same service UUID defined above
-        .listen((device)
-    {
-      // if the device hasn't been discovered yet, add it to the list of found devices
-      if (!_foundBleDevices.any((element) => element.id == device.id)) {
-        _foundBleDevices.add(device);
-        // and if it matches the name filter, also add it to the filtered list (which is the one returned to the UI)
-        if (device.name.contains(bleDeviceNameFilter)) {
-          _foundBleDevicesFiltered.add(device);
-        }
-        notifyListeners();
-      }
-    }, onError: (Object error) {
-      debugPrint("ERROR during scan: $error");
-    });
+    _scanStream = _ble
+        .scanForDevices(
+          withServices: [/* serviceUuid */],
+        ) //TODO: uncomment once we've ensured the firmware uses the same service UUID defined above
+        .listen(
+          (device) {
+            // if the device hasn't been discovered yet, add it to the list of found devices
+            if (!_foundBleDevices.any((element) => element.id == device.id)) {
+              _foundBleDevices.add(device);
+              // and if it matches the name filter, also add it to the filtered list (which is the one returned to the UI)
+              if (device.name.contains(bleDeviceNameFilter)) {
+                _foundBleDevicesFiltered.add(device);
+              }
+              notifyListeners();
+            }
+          },
+          onError: (Object error) {
+            debugPrint("ERROR during scan: $error");
+          },
+        );
 
     // stop scanning after scanDuration elapsed
     Future.delayed(Duration(seconds: scanDuration), () {
@@ -183,7 +197,10 @@ class BleController extends ChangeNotifier {
       final completer = Completer<void>();
 
       _connection = _ble
-          .connectToDevice(id: device.id, connectionTimeout: Duration(seconds: connectionTimeout))
+          .connectToDevice(
+            id: device.id,
+            connectionTimeout: Duration(seconds: connectionTimeout),
+          )
           .listen(
             (event) {
               switch (event.connectionState) {
@@ -205,23 +222,25 @@ class BleController extends ChangeNotifier {
                   _onDeviceDisconnected();
                   // notify the UI that the connection is lost
                   if (!completer.isCompleted) {
-                    completer.completeError("Disconnected unexpectedly during connection setup");
+                    completer.completeError(
+                      "Disconnected unexpectedly during connection setup",
+                    );
                   }
                   break;
 
                 default:
                   break;
               }
-        },
-        onError: (error) {
-          // execute the disconnection logic
-          _onDeviceDisconnected();
-          // notify the UI that an error occurred
-          if (!completer.isCompleted) {
-            completer.completeError("Connection error: $error");
-          }
-        },
-      );
+            },
+            onError: (error) {
+              // execute the disconnection logic
+              _onDeviceDisconnected();
+              // notify the UI that an error occurred
+              if (!completer.isCompleted) {
+                completer.completeError("Connection error: $error");
+              }
+            },
+          );
 
       // wait until either connection is established or an error occurs
       await completer.future;
@@ -246,11 +265,30 @@ class BleController extends ChangeNotifier {
     }
 
     try {
-      await _ble.writeCharacteristicWithoutResponse(_txCharacteristic!, value: command);
+      await _ble.writeCharacteristicWithoutResponse(
+        _txCharacteristic!,
+        value: command,
+      );
     } catch (e) {
       debugPrint("ERROR during command send: $e");
       rethrow;
     }
+  }
+
+  /// Method that enable to inject synthetic data into the corresponding streams,
+  /// simulating the reception of data from a real BLE device.
+  ///
+  /// (To be used for UI testing purposes, not intended for production use).
+  void injectSyntheticData({
+    double? ppg,
+    double? filteredPpg,
+    int? heartRate,
+    double? temperature,
+  }) {
+    if (ppg != null) _ppgDataController.add(ppg);
+    if (filteredPpg != null) _filteredPpgDataController.add(filteredPpg);
+    if (heartRate != null) _heartRateController.add(heartRate);
+    if (temperature != null) _temperatureController.add(temperature);
   }
 
   //endregion
@@ -260,42 +298,49 @@ class BleController extends ChangeNotifier {
   void _onDeviceConnected(String deviceId) {
     // update local state
     _connectionStatus = BleConnectionStatus.connected;
-    _connectedDevice = _foundBleDevicesFiltered.firstWhere((d) => d.id == deviceId);
+    _connectedDevice = _foundBleDevicesFiltered.firstWhere(
+      (d) => d.id == deviceId,
+    );
     notifyListeners();
     debugPrint("Connected to $deviceId");
 
     // SETUP RX
     final rxCharacteristic = QualifiedCharacteristic(
-        serviceId: serviceUuid,
-        characteristicId: characteristicUuid,
-        deviceId: deviceId);
+      serviceId: serviceUuid,
+      characteristicId: characteristicUuid,
+      deviceId: deviceId,
+    );
 
     // define what happens when a new packet is received by the RX
     List<int> packetBuffer = [];
 
     _rxSubscription = _ble
         .subscribeToCharacteristic(rxCharacteristic)
-        .listen((packet) {
-          // add the received packet to the buffer
-          packetBuffer.addAll(packet);
+        .listen(
+          (packet) {
+            // add the received packet to the buffer
+            packetBuffer.addAll(packet);
 
-          // if at least a full packet has been received, process it and forward to the custom stream
-          while (packetBuffer.length >= fixedPacketLength) {
-            // pop the first full packet from the buffer
-            List<int> data = packetBuffer.sublist(0, fixedPacketLength);
-            packetBuffer.removeRange(0, fixedPacketLength);
+            // if at least a full packet has been received, process it and forward to the custom stream
+            while (packetBuffer.length >= fixedPacketLength) {
+              // pop the first full packet from the buffer
+              List<int> data = packetBuffer.sublist(0, fixedPacketLength);
+              packetBuffer.removeRange(0, fixedPacketLength);
 
-            _processReceivedPacket(data);
-          }
-        }, onError: (Object error) {
-          debugPrint("RX error: $error");
-        });
+              _processReceivedPacket(data);
+            }
+          },
+          onError: (Object error) {
+            debugPrint("RX error: $error");
+          },
+        );
 
     // SETUP TX
     final txCharacteristic = QualifiedCharacteristic(
-        serviceId: serviceUuid,
-        characteristicId: characteristicUuidTX,
-        deviceId: deviceId);
+      serviceId: serviceUuid,
+      characteristicId: characteristicUuidTX,
+      deviceId: deviceId,
+    );
     _txCharacteristic = txCharacteristic;
   }
 
@@ -304,28 +349,85 @@ class BleController extends ChangeNotifier {
       throw Exception("Invalid packet received: missing start/end delimiters");
     }
 
-    // print(packet);
+    PacketType packetType = PacketType.fromByte(packet[1]);
 
-    int packetType = packet[1]; //TODO: replace this int with an enum
+    switch (packetType) {
+      case PacketType.ppgData:
+        _processPpgDataPacket(packet, _ppgDataController);
+        break;
 
-    if (packetType != 70) {
-      print(packet);
-      return;
+      case PacketType.filteredPpgData:
+        _processPpgDataPacket(packet, _filteredPpgDataController);
+        break;
+
+      case PacketType.heartRate:
+        _processHeartRatePacket(packet);
+        break;
+
+      case PacketType.temperature:
+        _processTemperaturePacket(packet);
+        break;
+
+      case PacketType.accelerationData:
+      case PacketType.gyroscopeData:
+      case PacketType.unknown:
+        debugPrint(
+          "Received packet of type $packetType, which is not supported yet.\nPacket content: $packet",
+        );
     }
+  }
 
-    // TODO: check if it's a battery or a sensed data packet and forward to the corresponding stream (instead of always forwarding to sensedData stream)
+  /// Process the received packet and forward the extracted data to the corresponding stream.
+  ///
+  /// Expected packet format: `{ | 'P' or 'F' | sample_count (≤4) | (up to) 4 × uint32_t in Big Endian | (eventually) padding | }`
+  void _processPpgDataPacket(
+    List<int> packet,
+    StreamController<double> outputStream,
+  ) {
     int packetLength = packet[2];
+    List<int> dataBytes = packet.sublist(3, packet.length - 1);
 
-    for (int i = 3; i < 4 * packetLength + 2; i += 4) {
+    for (int i = 0; i < 4 * packetLength; i += 4) {
       // Extract the 4 bytes corresponding to the current float value
-      List<int> bytes = packet.sublist(i, i + 4);
-      ByteData byteData = ByteData.sublistView(Uint8List.fromList(bytes));
+      List<int> valueBytes = dataBytes.sublist(i, i + 4);
+      ByteData valueByteData = ByteData.sublistView(
+        Uint8List.fromList(valueBytes),
+      );
 
-      // convert the bytes to a float value (assuming big-endian byte order)
-      double value = byteData.getFloat32(0, Endian.big);
+      // convert the bytes to a float value
+      double value = valueByteData.getFloat32(0, Endian.big);
 
-      _sensedDataController.add(value);
+      // forward the value to the corresponding stream
+      outputStream.add(value);
     }
+  }
+
+  /// Process the received heart rate packet and forward the extracted data to the corresponding stream.
+  ///
+  /// Expected packet format: `{ | 'H' | BPM (uint8_t) | padding | }`
+  void _processHeartRatePacket(List<int> packet) {
+    int bpm = packet[2];
+
+    _heartRateController.add(bpm);
+  }
+
+  /// Process the received temperature packet and forward the extracted data to the corresponding stream.
+  ///
+  /// Expected packet format: `{ | 'T' | temperature (1 x float32_t in Big Endian) | padding | }`
+  void _processTemperaturePacket(List<int> packet) {
+    List<int> dataBytes = packet.sublist(2, packet.length - 1);
+
+    // Extract the 4 bytes corresponding to the float temperature value
+    List<int> valueBytes = dataBytes.sublist(0, 4);
+    ByteData valueByteData = ByteData.sublistView(
+      Uint8List.fromList(valueBytes),
+    );
+
+    // convert the bytes to a float
+    double temperature = valueByteData.getFloat32(0, Endian.big);
+
+    // forward the temperature value to the corresponding stream
+    _temperatureController.add(temperature);
   }
 
   void _onDeviceDisconnected() {

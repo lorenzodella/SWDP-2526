@@ -4,6 +4,11 @@ import 'package:swdp_bio_app/connection_screen.dart';
 import 'package:swdp_bio_app/home_screen.dart';
 
 void main() {
+  // // enable generation of mock data to test UI without a real wearable device available
+  // if (kDebugMode) {
+  //   startMockData();
+  // }
+
   runApp(const MyApp());
 }
 
@@ -15,18 +20,17 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'SWDP BIO A6 APP',
-      theme: ThemeData(
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
+      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple)),
       home: ListenableBuilder(
         listenable: BleController.instance,
         builder: (context, _) {
+          // add kDebugMode || at the beginning of the condition if using mockData
           if (BleController.instance.connectionStatus == BleConnectionStatus.connected) {
             return const HomeScreen();
           } else {
             return const ConnectionScreen();
           }
-        }
+        },
       ),
     );
   }
