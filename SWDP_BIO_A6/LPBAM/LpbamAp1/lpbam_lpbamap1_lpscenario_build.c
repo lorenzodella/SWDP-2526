@@ -26,15 +26,20 @@
 
 /* USER CODE END LpbamAp1_LPScenario_Descs 0 */
 
-/* USER CODE BEGIN Temp_acq_Q_Master_Transmit_Data_1_Desc[1] */
+/* USER CODE BEGIN Temp_acq_Q_Transmit_OneShot_Desc[1] */
 
-/* USER CODE END Temp_acq_Q_Master_Transmit_Data_1_Desc[1] */
-static LPBAM_I2C_MasterTxDataDesc_t Temp_acq_Q_Master_Transmit_Data_1_Desc[1];
+/* USER CODE END Temp_acq_Q_Transmit_OneShot_Desc[1] */
+static LPBAM_I2C_MasterTxDataDesc_t Temp_acq_Q_Transmit_OneShot_Desc[1];
 
-/* USER CODE BEGIN Temp_acq_Q_Master_Receive_Data_1_Desc[1] */
+/* USER CODE BEGIN Temp_acq_Q_Transmit_Data_Desc[1] */
 
-/* USER CODE END Temp_acq_Q_Master_Receive_Data_1_Desc[1] */
-static LPBAM_I2C_MasterRxDataDesc_t Temp_acq_Q_Master_Receive_Data_1_Desc[1];
+/* USER CODE END Temp_acq_Q_Transmit_Data_Desc[1] */
+static LPBAM_I2C_MasterTxDataDesc_t Temp_acq_Q_Transmit_Data_Desc[1];
+
+/* USER CODE BEGIN Temp_acq_Q_Receive_Data_Desc[1] */
+
+/* USER CODE END Temp_acq_Q_Receive_Data_Desc[1] */
+static LPBAM_I2C_MasterRxDataDesc_t Temp_acq_Q_Receive_Data_Desc[1];
 
 /* USER CODE BEGIN LpbamAp1_LPScenario_Descs 1 */
 
@@ -94,16 +99,16 @@ static void MX_Temp_acq_Q_Build(void)
   uint32_t transfer_idx = 0;
 
   /**
-    * Temp_acq queue Master_Transmit_Data_1 build
+    * Temp_acq queue Transmit_OneShot build
     */
    pDMAListInfo_I2C.QueueType= LPBAM_LINEAR_ADDRESSING_Q;
    pDMAListInfo_I2C.pInstance= LPDMA1;
   pTxData_I2C.AutoModeConf.TriggerState = LPBAM_I2C_AUTO_MODE_DISABLE;
    pTxData_I2C.AddressingMode = LPBAM_I2C_ADDRESSINGMODE_7BIT;
    pTxData_I2C.SequenceNumber = 1;
-   pTxData_I2C.pData = (uint8_t*)&DataRegisterBuffer[0];
-   pTxData_I2C.DevAddress = 0x90;
-   pTxData_I2C.Size = 1;
+   pTxData_I2C.pData = (uint8_t*)&ConfigBuffer[0];
+   pTxData_I2C.DevAddress = 0x48;
+   pTxData_I2C.Size = 2;
   /* Set transfer parameters */
   data_size = pTxData_I2C.Size;
   tmp_data_size = pTxData_I2C.Size;
@@ -112,7 +117,7 @@ static void MX_Temp_acq_Q_Build(void)
   /* Repeat inserting I2C master Tx data queue until completing all data */
   while (data_size != 0U)
   {
-    if (ADV_LPBAM_I2C_MasterTx_SetDataQ(I2C3, &pDMAListInfo_I2C, &pTxData_I2C, &Temp_acq_Q_Master_Transmit_Data_1_Desc[transfer_idx], &Temp_acq_Q) != LPBAM_OK)
+    if (ADV_LPBAM_I2C_MasterTx_SetDataQ(I2C3, &pDMAListInfo_I2C, &pTxData_I2C, &Temp_acq_Q_Transmit_OneShot_Desc[transfer_idx], &Temp_acq_Q) != LPBAM_OK)
     {
       Error_Handler();
     }
@@ -134,19 +139,56 @@ static void MX_Temp_acq_Q_Build(void)
   pTrigConfig_I2C.TriggerConfig.TriggerMode = LPBAM_DMA_TRIGM_BLOCK_TRANSFER;
   pTrigConfig_I2C.TriggerConfig.TriggerPolarity = LPBAM_DMA_TRIG_POLARITY_RISING;
   pTrigConfig_I2C.TriggerConfig.TriggerSelection = LPBAM_LPDMA1_TRIGGER_LPTIM1_CH1;
-  if (ADV_LPBAM_Q_SetTriggerConfig (&pTrigConfig_I2C, LPBAM_I2C_MASTERTX_DATAQ_CONFIG_NODE, &Temp_acq_Q_Master_Transmit_Data_1_Desc) != LPBAM_OK)
+  if (ADV_LPBAM_Q_SetTriggerConfig (&pTrigConfig_I2C, LPBAM_I2C_MASTERTX_DATAQ_CONFIG_NODE, &Temp_acq_Q_Transmit_OneShot_Desc) != LPBAM_OK)
   {
     Error_Handler();
   }
 
   /**
-    * Temp_acq queue Master_Receive_Data_1 build
+    * Temp_acq queue Transmit_Data build
+    */
+   pTxData_I2C.pData = (uint8_t*)&DataRegisterBuffer[0];
+   pTxData_I2C.Size = 1;
+  /* Set transfer parameters */
+  data_size = pTxData_I2C.Size;
+  tmp_data_size = pTxData_I2C.Size;
+  transfer_idx = 0;
+
+  /* Repeat inserting I2C master Tx data queue until completing all data */
+  while (data_size != 0U)
+  {
+    if (ADV_LPBAM_I2C_MasterTx_SetDataQ(I2C3, &pDMAListInfo_I2C, &pTxData_I2C, &Temp_acq_Q_Transmit_Data_Desc[transfer_idx], &Temp_acq_Q) != LPBAM_OK)
+    {
+      Error_Handler();
+    }
+
+    transfer_idx++;
+
+    if (data_size > LPBAM_I2C_MAX_DATA_SIZE)
+    {
+      data_size -= LPBAM_I2C_MAX_DATA_SIZE;
+    }
+    else
+    {
+      data_size = 0U;
+    }
+
+    pTxData_I2C.Size = data_size;
+  }
+  pTxData_I2C.Size = tmp_data_size;
+  if (ADV_LPBAM_Q_SetTriggerConfig (&pTrigConfig_I2C, LPBAM_I2C_MASTERTX_DATAQ_CONFIG_NODE, &Temp_acq_Q_Transmit_Data_Desc) != LPBAM_OK)
+  {
+    Error_Handler();
+  }
+
+  /**
+    * Temp_acq queue Receive_Data build
     */
   pRxData_I2C.AutoModeConf.TriggerState = LPBAM_I2C_AUTO_MODE_DISABLE;
    pRxData_I2C.AddressingMode = LPBAM_I2C_ADDRESSINGMODE_7BIT;
    pRxData_I2C.SequenceNumber = 1;
    pRxData_I2C.pData = (uint8_t*)&TempDataBuff[0];
-   pRxData_I2C.DevAddress = 0x90;
+   pRxData_I2C.DevAddress = 0x48;
    pRxData_I2C.Size = 2;
   /* Set transfer parameters */
   data_size = pRxData_I2C.Size;
@@ -156,7 +198,7 @@ static void MX_Temp_acq_Q_Build(void)
   /* Repeat inserting I2C master Tx data queue until completing all data */
   while (data_size != 0U)
   {
-    if (ADV_LPBAM_I2C_MasterRx_SetDataQ(I2C3, &pDMAListInfo_I2C, &pRxData_I2C, &Temp_acq_Q_Master_Receive_Data_1_Desc[transfer_idx], &Temp_acq_Q) != LPBAM_OK)
+    if (ADV_LPBAM_I2C_MasterRx_SetDataQ(I2C3, &pDMAListInfo_I2C, &pRxData_I2C, &Temp_acq_Q_Receive_Data_Desc[transfer_idx], &Temp_acq_Q) != LPBAM_OK)
     {
       Error_Handler();
     }
@@ -175,7 +217,7 @@ static void MX_Temp_acq_Q_Build(void)
     pRxData_I2C.Size = data_size;
   }
   pRxData_I2C.Size = tmp_data_size;
-  if (ADV_LPBAM_Q_SetTriggerConfig (&pTrigConfig_I2C, LPBAM_I2C_MASTERRX_DATAQ_CONFIG_NODE, &Temp_acq_Q_Master_Receive_Data_1_Desc) != LPBAM_OK)
+  if (ADV_LPBAM_Q_SetTriggerConfig (&pTrigConfig_I2C, LPBAM_I2C_MASTERRX_DATAQ_CONFIG_NODE, &Temp_acq_Q_Receive_Data_Desc) != LPBAM_OK)
   {
     Error_Handler();
   }

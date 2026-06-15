@@ -384,6 +384,37 @@ void BLE_SendPacket_HR(uint8_t bpm) {
     BLE_SendData(ble_packet, sizeof(ble_packet));
 }
 
+/**
+ * @brief Sends the temperature reading as a structured packet over BLE.
+ *
+ * Packet format: { | 'T' | temp (4-byte float, big-endian) | padding | }
+ * where 'T' indicates that the packet contains temperature data.
+ *
+ * @param temperature The temperature value in degrees Celsius.
+ */
+void BLE_SendPacket_Temperature(float32_t temperature) {
+    uint8_t ble_packet[PACKET_LENGTH];
+
+    // Initialize the packet buffer
+    ble_packet[0] = '{';
+    memset(&ble_packet[1], 0, PACKET_LENGTH - 2);
+    ble_packet[PACKET_LENGTH - 1] = '}';
+
+    // Byte 1: Data type identifier
+    // ('T' for Temperature data)
+    ble_packet[1] = 'T';
+
+    // Bytes 2-5: Temperature float value in big-endian (IEEE 754)
+    uint32_t temp_raw;
+    memcpy(&temp_raw, &temperature, sizeof(uint32_t));
+    ble_packet[2] = (uint8_t)((temp_raw >> 24) & 0xFF); // MSB
+    ble_packet[3] = (uint8_t)((temp_raw >> 16) & 0xFF);
+    ble_packet[4] = (uint8_t)((temp_raw >> 8) & 0xFF);
+    ble_packet[5] = (uint8_t)((temp_raw >> 0) & 0xFF);  // LSB
+
+    // Send the complete packet over UART
+    BLE_SendData(ble_packet, sizeof(ble_packet));
+}
 
 // --- Helper Function Implementations ---
 // These helper functions encapsulate common, repeated tasks to improve code clarity.

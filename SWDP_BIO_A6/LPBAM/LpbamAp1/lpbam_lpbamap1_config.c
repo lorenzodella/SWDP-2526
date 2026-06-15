@@ -149,7 +149,7 @@ static void MX_SystemPower_Config(void)
   /*
    * Switch to SMPS regulator instead of LDO
    */
-  if (HAL_PWREx_ConfigSupply(PWR_SMPS_SUPPLY) != HAL_OK)
+  if (HAL_PWREx_ConfigSupply(PWR_LDO_SUPPLY) != HAL_OK)
   {
     Error_Handler();
   }

@@ -30,6 +30,7 @@
 #include "usbd_cdc_if.h"
 #include "../../USB_Device/App/usb_device.h"
 #include "lpbam_lpbamap1.h"
+#include "tempsens_driver.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -94,6 +95,7 @@ static uint8_t registered_heart_rates[REGISTERED_HR_SAMPLES_SIZE] = {0};
 static uint8_t registered_hr_idx = 0;
 
 uint8_t DataRegisterBuffer[1] __attribute__((section(".sram4"))) = {0x00};
+uint8_t ConfigBuffer[2] __attribute__((section(".sram4"))) = {0x01, 0x81};
 uint8_t TempDataBuff[2] __attribute__((section(".sram4"))) = {0x00, 0x00};
 
 /* USER CODE END PV */
@@ -183,6 +185,10 @@ int main(void)
     HAL_Delay(500);
   }
 
+  //Initialize the temperature sensor in shutdown mode
+  Temp_Init();
+  HAL_Delay(100);
+
   // Turn off the red LED to indicate that initialization is complete
   LED_Off(LED_RED);
 
@@ -192,9 +198,11 @@ int main(void)
   MX_LpbamAp1_LPScenario_Build();
   MX_LpbamAp1_LPScenario_Link(&handle_LPDMA1_Channel0);
   MX_LpbamAp1_LPScenario_Start(&handle_LPDMA1_Channel0);
-  // HAL_DBGMCU_EnableDBGStopMode();
+  //HAL_DBGMCU_EnableDBGStopMode();
   __HAL_RCC_PWR_CLK_ENABLE();
   HAL_LPTIM_TimeOut_Start(&hlptim1, 0xFFFF);
+
+
 
   /* USER CODE END 2 */
 
@@ -209,14 +217,15 @@ int main(void)
 		//LED_Toggle(LED_GREEN);
 		//HAL_Delay(1000);
 
-    LED_Toggle(LED_GREEN);
-    HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
-    LED_Toggle(LED_GREEN);
+    
 
 	  switch(current_state)
 	  {
-        // case STATE_IDLE:
-        //     break;
+        case STATE_IDLE:
+            LED_Toggle(LED_GREEN);
+            HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+            LED_Toggle(LED_GREEN);
+            break;
 	  	  case STATE_ACQUISITION:
             if (hr_ready_flag) {
               hr_ready_flag = 0;
@@ -870,9 +879,10 @@ void HAL_DMA_XferCpltCallback(DMA_HandleTypeDef *hdma)
      features such as autonomous SPI data transfers. */
   if(hdma == &handle_LPDMA1_Channel0)
   {
+    float32_t temp_value = MAX30205_GetTemperature(TempDataBuff);
     // Handle completion of DMA transfer for SPI3 (e.g., PPG data acquisition)
     // This is a placeholder for future implementation if autonomous mode is used.
-    BLE_SendPacket_HR(TempDataBuff[1]); // Example: send the first byte of the buffer as heart rate data
+    BLE_SendPacket_Temperature(temp_value); // Example: send the temperature value as a structured packet
   }
 }
 
