@@ -62,6 +62,7 @@ void EXTI8_IRQHandler(void);
 void EXTI10_IRQHandler(void);
 void EXTI13_IRQHandler(void);
 void TIM2_IRQHandler(void);
+void TIM3_IRQHandler(void);
 void SPI2_IRQHandler(void);
 void USART3_IRQHandler(void);
 void OTG_FS_IRQHandler(void);

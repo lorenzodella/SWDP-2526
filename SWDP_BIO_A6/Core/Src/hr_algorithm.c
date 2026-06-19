@@ -16,7 +16,7 @@
 #define PPG_ACQ_SIZE_LOCAL  128u
 #define PPG_FS_LOCAL        100.0f
 
-#define BPF_NUM_STAGES  1u
+#define BPF_NUM_STAGES  1
 
 /*
  * Filtro Butterworth Passa-Banda 2° ordine (0.5–4 Hz @ Fs = 100 Hz).
@@ -97,12 +97,6 @@ float32_t HR_Process(const uint32_t *circ_buf)
     }
     BLE_SendPacket_PPG_Filtered(to_send, PPG_ACQ_SIZE_LOCAL);
 
-    /* 4. Soglia adattativa basata sulla deviazione standard del segnale filtrato.
-     *    La soglia è 1.5× la deviazione standard — i picchi di rumore raramente
-     *    superano 1.5σ, mentre i picchi PPG sono tipicamente > 3σ.
-     *    Lo squelch assoluto (σ < 500) scarta il rumore quando il dito non è
-     *    appoggiato sul sensore.
-     */
     float32_t mean = 0.0f;
     for (uint32_t i = 0u; i < PPG_CIRC_SIZE_LOCAL; i++) {
         mean += filtered_buf[i];
@@ -132,13 +126,13 @@ float32_t HR_Process(const uint32_t *circ_buf)
      * Analizziamo partendo dal confine di giunzione (indice 127) per intercettare i picchi 
      * a cavallo tra la vecchia finestra e la nuova, estendendoci fino alla fine del buffer (indice 254).
      */
-    for (uint32_t i = (PPG_ACQ_SIZE_LOCAL - 1u); i < (PPG_CIRC_SIZE_LOCAL - 1u); i++) {
+    for (uint32_t i = (PPG_ACQ_SIZE_LOCAL - 1); i < (PPG_CIRC_SIZE_LOCAL - 1); i++) {
         float32_t s = filtered_buf[i];
 
         /* Condizione di massimo locale e superamento della soglia dinamica */
         if (s > threshold &&
-            s > filtered_buf[i - 1u] &&
-            s > filtered_buf[i + 1u])
+            s > filtered_buf[i - 1] &&
+            s > filtered_buf[i + 1])
         {
             /* Calcolo della coordinata temporale assoluta del picco */
             uint32_t peak_abs = (total_sample_cnt - PPG_ACQ_SIZE_LOCAL) + i;
@@ -164,7 +158,7 @@ float32_t HR_Process(const uint32_t *circ_buf)
                 }
             } else {
                 last_peak_abs_idx = peak_abs;
-                peak_found_once   = 1u;
+                peak_found_once   = 1;
             }
         }
     }

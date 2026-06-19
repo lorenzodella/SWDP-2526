@@ -6,7 +6,7 @@
 extern I2C_HandleTypeDef hi2c3;
 
 
-static uint8_t temp_write_register(uint8_t reg_addr, uint8_t reg_data)
+uint8_t temp_write_register(uint8_t reg_addr, uint8_t reg_data)
 {
     uint8_t tx_buffer[] = { reg_addr, reg_data };
 
@@ -17,7 +17,7 @@ static uint8_t temp_write_register(uint8_t reg_addr, uint8_t reg_data)
     return 1; 
 }
 
-static uint8_t temp_read_register(uint8_t reg_addr, uint8_t *data, uint16_t data_len)
+uint8_t temp_read_register(uint8_t reg_addr, uint8_t *data, uint16_t data_len)
 {
     if (HAL_I2C_Mem_Read(&hi2c3, (MAX30205_I2C_ADDRESS << 1), reg_addr, I2C_MEMADD_SIZE_8BIT, data, data_len, MAX30205_I2C_TIMEOUT) != HAL_OK) {
         return 0; 
@@ -42,7 +42,7 @@ uint8_t Temp_Init(void)
  */
 uint8_t MAX30205_StartOneShot(void)
 {
-    // Scrive 0x81 (Bit D7 One-Shot + Bit D0 Shutdown attivo)
+    // Write 0x81 (D7 One-Shot bit + D0 Shutdown bit set) 
     return temp_write_register(MAX30205_REG_CONF, 0x81);
 }
 
@@ -55,16 +55,16 @@ uint8_t MAX30205_GetTemperature(float *temperature_celsius)
 {
     uint8_t raw_data[2] = {0, 0};
 
-    // Legge 2 byte partendo dal registro della temperatura (0x00)
+    // Read 2 bytes starting from the temperature register (0x00) 
     if (!temp_read_register(MAX30205_REG_TEMP, raw_data, 2)) {
         return 0; // Errore di lettura
     }
 
-    // Ricostruisce il dato a 16 bit con segno (raw_data[0] è MSB, raw_data[1] è LSB)
+    // Reconstruct the signed 16-bit value (raw_data[0] = MSB, raw_data[1] = LSB) 
     int16_t temp_raw = (int16_t)((raw_data[0] << 8) | raw_data[1]);
 
-    // Converte il dato grezzo moltiplicandolo per la risoluzione (0.00390625 °C)
+    // Convert to degrees Celsius using the sensor's resolution 
     *temperature_celsius = (float)temp_raw * 0.00390625f;
 
-    return 1; // Successo
+    return 1;
 }

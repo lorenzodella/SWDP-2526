@@ -26,6 +26,7 @@
 #include "SPI_NAND.h"
 #include "stm32u5xx_hal.h"
 #include "stm32u5xx_hal_gpio.h"
+#include "stm32u5xx_hal_tim.h"
 #include "stm32u5xx_hal_uart.h"
 #include "usbd_cdc_if.h"
 #include "tempsens_driver.h"
@@ -60,6 +61,7 @@ SPI_HandleTypeDef hspi2;
 SPI_HandleTypeDef hspi3;
 
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart3;
 
@@ -92,7 +94,6 @@ static float32_t registered_heart_rates[REGISTERED_HR_SAMPLES_SIZE] = {0.0f};
 static uint8_t registered_hr_idx = 0;
 static uint8_t registered_hr_count = 0;  // number of valid samples collected so far (warm-up)
 
-static uint32_t temp_timer = 0;
 static uint8_t flag_temp = 0;
 static float temp_value = 60;
 
@@ -109,6 +110,7 @@ static void MX_MDF1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_SPI3_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -155,6 +157,7 @@ int main(void)
   MX_TIM2_Init();
   MX_SPI2_Init();
   MX_SPI3_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
   // Turn the RED LED on to indicate the start of the initialization process
@@ -189,6 +192,9 @@ int main(void)
   //Initialize temperture sensor
   Temp_Init();
 
+  // Start TIM2 to trigger temperature readings every 30 seconds
+  HAL_TIM_Base_Start_IT(&htim2);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -205,26 +211,13 @@ int main(void)
 	  switch(current_state)
 	  {
         case STATE_IDLE:
-          if ((HAL_GetTick() - temp_timer) >= 10000) 
-          {
-            // 3. Salvi il tempo attuale come nuovo punto di partenza per i prossimi 30s
-            temp_timer = HAL_GetTick();
-
-            //mando One-Shot
-            MAX30205_StartOneShot();
-
-            // Aspetta almeno 50 ms per completare la conversione su tmep reg
-            HAL_Delay(55);
-
-            //read temp value and do the convertion to °C
-            MAX30205_GetTemperature(&temp_value);
-
-            //Send it via BLE
-            BLE_SendPacket_Temperature(temp_value);
-
-          }
-        
-        break;
+            if (flag_temp) {
+              flag_temp = 0;
+              
+              //Send it via BLE
+              BLE_SendPacket_Temperature(temp_value);
+            }
+            break;
 
 	  	  case STATE_ACQUISITION:
             if (hr_ready_flag) {
@@ -254,25 +247,11 @@ int main(void)
               BLE_SendPacket_HR(hr_avg);
             }
 
-            if (flag_temp == 0 && (HAL_GetTick() - temp_timer) >= 10000) 
-            {
-              // 3. Salvi il tempo attuale come nuovo punto di partenza per i prossimi 30s
-              temp_timer = HAL_GetTick();
-
-              //mando One-Shot
-              MAX30205_StartOneShot();
-
-              flag_temp=1;
-            }
-
-            if (flag_temp == 1 && (HAL_GetTick()-temp_timer) >=55){
-              flag_temp =0;
-              //read temp value and do the convertion to °C
-              MAX30205_GetTemperature(&temp_value);
-
+            if (flag_temp) {
+              flag_temp = 0;
+              
               //Send it via BLE
               BLE_SendPacket_Temperature(temp_value);
-
             }
             break;
         default:
@@ -604,9 +583,9 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 7200-1;
+  htim2.Init.Prescaler = 36000-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 99;
+  htim2.Init.Period = 59999;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -627,6 +606,51 @@ static void MX_TIM2_Init(void)
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 7200-1;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 549;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
 
 }
 
@@ -782,7 +806,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : PPG_INT_Pin */
   GPIO_InitStruct.Pin = PPG_INT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(PPG_INT_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : MCU_I_O_2_Pin MCU_I_O_1_Pin */
@@ -825,13 +849,24 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 /**
   * @brief  Callback function for the timer period elapsed event.
-  *         Not used in the current application (TIM2 is disabled).
   * @param  htim: Pointer to the timer handle.
   */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-  /* TIM2 is not started in this application — keep for future use */
-  (void)htim;
+  if (htim->Instance == TIM2) {
+    MAX30205_StartOneShot();
+    // Start TIM3 to wait for the conversion to complete (50 ms)
+    HAL_TIM_Base_Start_IT(&htim3);
+  }
+  else if (htim->Instance == TIM3) {
+    // Stop TIM3 to prevent further interrupts until the next one-shot trigger
+    HAL_TIM_Base_Stop_IT(&htim3);
+
+    //read temp value and do the convertion to °C
+    MAX30205_GetTemperature(&temp_value);
+
+    flag_temp=1;
+  }
 }
 
 
@@ -854,7 +889,7 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
           registered_hr_idx   = 0;
           registered_hr_count = 0;
           current_state = STATE_ACQUISITION;
-          temp_timer=0;
+          flag_temp = 0;
         }
 			break;
 			case STATE_ACQUISITION:
